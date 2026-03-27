@@ -149,3 +149,51 @@ class PlayerDetailResponse(BaseModel):
     seasons: list[PlayerSeasonResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class PlayerDerivedStatsResponse(BaseModel):
+    player_id: int
+    season: int
+    position: str
+    games_played: int
+    full_name: str
+    nfl_team: str
+    headshot_url: str | None = None
+    # Per-game rates
+    ppr_per_game: float | None = None
+    standard_per_game: float | None = None
+    pass_yards_per_game: float | None = None
+    rush_yards_per_game: float | None = None
+    rec_yards_per_game: float | None = None
+    targets_per_game: float | None = None
+    receptions_per_game: float | None = None
+    tds_per_game: float | None = None
+    # Efficiency
+    yards_per_carry: float | None = None
+    yards_per_target: float | None = None
+    yards_per_reception: float | None = None
+    catch_rate: float | None = None
+    completion_pct: float | None = None
+    td_rate: float | None = None
+    # Advanced
+    pass_epa_per_game: float | None = None
+    rush_epa_per_game: float | None = None
+    cpoe: float | None = None
+    target_share: float | None = None
+    air_yards_per_game: float | None = None
+    yac_per_reception: float | None = None
+    snap_pct: float | None = None
+    # Kicking
+    fg_pct: float | None = None
+    fg_made_per_game: float | None = None
+    fg_long: int | None = None
+    xp_pct: float | None = None
+    # Boom/bust
+    median_ppr: float | None = None
+    stdev_ppr: float | None = None
+    # Totals
+    total_tds: int | None = None
+    total_yards: int | None = None
+    fantasy_points_ppr: float | None = None
+
+    model_config = {"from_attributes": True}

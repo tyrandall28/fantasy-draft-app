@@ -8,6 +8,7 @@ import RankingsPage from "./pages/RankingsPage";
 import LobbyPage from "./pages/LobbyPage";
 import DraftRoomPage from "./pages/DraftRoomPage";
 import DraftResultsPage from "./pages/DraftResultsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 /** Standard pages get navbar + gray background */
 function DefaultLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,16 @@ export default function App() {
           <DefaultLayout>
             <ProtectedRoute>
               <RankingsPage />
+            </ProtectedRoute>
+          </DefaultLayout>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <DefaultLayout>
+            <ProtectedRoute>
+              <AnalyticsPage />
             </ProtectedRoute>
           </DefaultLayout>
         }

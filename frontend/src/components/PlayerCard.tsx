@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
+import WeeklyTrendChart from "./analytics/WeeklyTrendChart";
 import type { PlayerDetail, PlayerWeekly } from "../types";
 
 const POS_COLOR: Record<string, string> = {
@@ -231,7 +232,10 @@ export default function PlayerCard({ playerId, onClose }: Props) {
                 {weekly.length === 0 ? (
                   <p className="text-sm text-slate-500 text-center py-8">No game logs available</p>
                 ) : (
-                  <WeeklyTable weeks={weekly} position={pos} />
+                  <>
+                    <WeeklyTrendChart weeks={weekly} position={pos} />
+                    <WeeklyTable weeks={weekly} position={pos} />
+                  </>
                 )}
               </div>
             )}

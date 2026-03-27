@@ -8,6 +8,7 @@ from app.api.players import router as players_router
 from app.api.rankings import router as rankings_router
 from app.api.leagues import router as leagues_router
 from app.api.drafts import router as drafts_router
+from app.api.analytics import router as analytics_router
 from app.ws.events import router as ws_router
 from app.config import settings
 
@@ -32,4 +33,5 @@ app.include_router(players_router)
 app.include_router(rankings_router)
 app.include_router(leagues_router)
 app.include_router(drafts_router)
+app.include_router(analytics_router)
 app.include_router(ws_router)

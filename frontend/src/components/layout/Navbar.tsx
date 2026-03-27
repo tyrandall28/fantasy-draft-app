@@ -17,6 +17,9 @@ export default function Navbar() {
           <Link to="/rankings" className="text-sm text-slate-300 hover:text-white transition-colors">
             Rankings
           </Link>
+          <Link to="/analytics" className="text-sm text-slate-300 hover:text-white transition-colors">
+            Analytics
+          </Link>
           <span className="text-slate-500 text-sm">{user.username}</span>
           <button
             onClick={logout}

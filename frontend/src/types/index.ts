@@ -178,6 +178,52 @@ export interface DraftPick {
   username: string;
 }
 
+export interface PlayerDerivedStats {
+  player_id: number;
+  season: number;
+  position: string;
+  games_played: number;
+  full_name: string;
+  nfl_team: string;
+  headshot_url: string | null;
+  // Per-game rates
+  ppr_per_game: number | null;
+  standard_per_game: number | null;
+  pass_yards_per_game: number | null;
+  rush_yards_per_game: number | null;
+  rec_yards_per_game: number | null;
+  targets_per_game: number | null;
+  receptions_per_game: number | null;
+  tds_per_game: number | null;
+  // Efficiency
+  yards_per_carry: number | null;
+  yards_per_target: number | null;
+  yards_per_reception: number | null;
+  catch_rate: number | null;
+  completion_pct: number | null;
+  td_rate: number | null;
+  // Advanced
+  pass_epa_per_game: number | null;
+  rush_epa_per_game: number | null;
+  cpoe: number | null;
+  target_share: number | null;
+  air_yards_per_game: number | null;
+  yac_per_reception: number | null;
+  snap_pct: number | null;
+  // Kicking
+  fg_pct: number | null;
+  fg_made_per_game: number | null;
+  fg_long: number | null;
+  xp_pct: number | null;
+  // Boom/bust
+  median_ppr: number | null;
+  stdev_ppr: number | null;
+  // Totals
+  total_tds: number | null;
+  total_yards: number | null;
+  fantasy_points_ppr: number | null;
+}
+
 export interface DraftState {
   picks: DraftPick[];
   current_pick: number;

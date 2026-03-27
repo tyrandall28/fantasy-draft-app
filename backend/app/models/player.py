@@ -187,3 +187,59 @@ class PlayerWeeklyStat(Base):
     snap_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     player: Mapped["Player"] = relationship(back_populates="weekly_stats")
+
+
+class PlayerDerivedStats(Base):
+    """Pre-computed per-player-per-season derived metrics for analytics."""
+    __tablename__ = "player_derived_stats"
+    __table_args__ = (UniqueConstraint("player_id", "season", name="uq_player_derived_season"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False, index=True)
+    season: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    position: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    games_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Per-game rates
+    ppr_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    standard_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pass_yards_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_yards_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_yards_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    targets_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    receptions_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tds_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Efficiency stats
+    yards_per_carry: Mapped[float | None] = mapped_column(Float, nullable=True)
+    yards_per_target: Mapped[float | None] = mapped_column(Float, nullable=True)
+    yards_per_reception: Mapped[float | None] = mapped_column(Float, nullable=True)
+    catch_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completion_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    td_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Advanced stats
+    pass_epa_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_epa_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cpoe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    air_yards_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    yac_per_reception: Mapped[float | None] = mapped_column(Float, nullable=True)
+    snap_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Kicking
+    fg_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fg_made_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fg_long: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    xp_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Boom/bust (computed from weekly data)
+    median_ppr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stdev_ppr: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Totals (useful for sorting)
+    total_tds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_yards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fantasy_points_ppr: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    player: Mapped["Player"] = relationship()

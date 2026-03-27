@@ -27,7 +27,7 @@ import nflreadpy as nfl
 from sqlalchemy import select, func, delete
 
 from app.database import async_session
-from app.models.player import Player, PlayerBio, PlayerSeason, PlayerWeeklyStat
+from app.models.player import Player, PlayerBio, PlayerDerivedStats, PlayerSeason, PlayerWeeklyStat
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -696,6 +696,135 @@ async def step5_snap_counts(seasons: list[int], dry_run: bool = False):
         logger.info(f"  Aggregated snap counts into season totals")
 
 
+async def step6_compute_derived_stats(seasons: list[int], dry_run: bool = False):
+    """Compute derived analytics metrics from season totals and weekly stats."""
+    logger.info(f"Step 6: Computing derived stats for {seasons}...")
+    import statistics
+
+    async with async_session() as db:
+        if not dry_run:
+            await db.execute(
+                delete(PlayerDerivedStats).where(PlayerDerivedStats.season.in_(seasons))
+            )
+
+        for season in seasons:
+            # Get all player seasons for this year
+            result = await db.execute(
+                select(PlayerSeason)
+                .where(PlayerSeason.season == season)
+                .options()
+            )
+            player_seasons = result.scalars().all()
+
+            # Build player_id -> Player map for position lookup
+            pids = [ps.player_id for ps in player_seasons]
+            if not pids:
+                logger.info(f"  {season}: no player seasons found, skipping")
+                continue
+
+            player_result = await db.execute(
+                select(Player).where(Player.id.in_(pids))
+            )
+            player_map = {p.id: p for p in player_result.scalars()}
+
+            count = 0
+            for ps in player_seasons:
+                player = player_map.get(ps.player_id)
+                if not player or (ps.games_played or 0) < 1:
+                    continue
+
+                gp = ps.games_played
+                pos = player.position
+
+                # Helper for safe division
+                def div(a, b):
+                    if a is None or b is None or b == 0:
+                        return None
+                    return round(a / b, 2)
+
+                # Total TDs
+                total_tds = sum(filter(None, [
+                    ps.pass_tds, ps.rush_tds, ps.rec_tds,
+                    ps.special_teams_tds,
+                ]))
+
+                # Total yards
+                total_yards = sum(filter(None, [
+                    ps.pass_yards, ps.rush_yards, ps.rec_yards,
+                ]))
+
+                # Kicking percentages
+                fg_pct = div(ps.fg_made, ps.fg_att) if ps.fg_att and ps.fg_att > 0 else None
+                if fg_pct is not None:
+                    fg_pct = round(fg_pct * 100, 1)
+                xp_pct = div(ps.pat_made, ps.pat_att) if ps.pat_att and ps.pat_att > 0 else None
+                if xp_pct is not None:
+                    xp_pct = round(xp_pct * 100, 1)
+
+                # Boom/bust: compute from weekly data
+                weekly_result = await db.execute(
+                    select(PlayerWeeklyStat.fantasy_points_ppr)
+                    .where(
+                        PlayerWeeklyStat.player_id == ps.player_id,
+                        PlayerWeeklyStat.season == season,
+                    )
+                )
+                weekly_ppr = [r[0] for r in weekly_result.all() if r[0] is not None]
+
+                median_ppr = round(statistics.median(weekly_ppr), 2) if len(weekly_ppr) >= 2 else None
+                stdev_ppr = round(statistics.stdev(weekly_ppr), 2) if len(weekly_ppr) >= 2 else None
+
+                derived = PlayerDerivedStats(
+                    player_id=ps.player_id,
+                    season=season,
+                    position=pos,
+                    games_played=gp,
+                    # Per-game rates
+                    ppr_per_game=div(ps.fantasy_points_ppr, gp),
+                    standard_per_game=div(ps.fantasy_points, gp),
+                    pass_yards_per_game=div(ps.pass_yards, gp),
+                    rush_yards_per_game=div(ps.rush_yards, gp),
+                    rec_yards_per_game=div(ps.rec_yards, gp),
+                    targets_per_game=div(ps.targets, gp),
+                    receptions_per_game=div(ps.receptions, gp),
+                    tds_per_game=div(total_tds, gp),
+                    # Efficiency
+                    yards_per_carry=div(ps.rush_yards, ps.rush_attempts),
+                    yards_per_target=div(ps.rec_yards, ps.targets),
+                    yards_per_reception=div(ps.rec_yards, ps.receptions),
+                    catch_rate=round((ps.receptions / ps.targets) * 100, 1) if ps.targets and ps.receptions and ps.targets > 0 else None,
+                    completion_pct=round((ps.pass_completions / ps.pass_attempts) * 100, 1) if ps.pass_attempts and ps.pass_completions and ps.pass_attempts > 0 else None,
+                    td_rate=div(total_tds, gp),
+                    # Advanced
+                    pass_epa_per_game=div(ps.pass_epa, gp),
+                    rush_epa_per_game=div(ps.rush_epa, gp),
+                    cpoe=ps.pass_cpoe,
+                    target_share=round(ps.target_share * 100, 1) if ps.target_share else None,
+                    air_yards_per_game=div(ps.rec_air_yards, gp),
+                    yac_per_reception=div(ps.rec_yards_after_catch, ps.receptions),
+                    snap_pct=ps.snap_pct,
+                    # Kicking
+                    fg_pct=fg_pct,
+                    fg_made_per_game=div(ps.fg_made, gp),
+                    fg_long=ps.fg_long,
+                    xp_pct=xp_pct,
+                    # Boom/bust
+                    median_ppr=median_ppr,
+                    stdev_ppr=stdev_ppr,
+                    # Totals
+                    total_tds=total_tds,
+                    total_yards=total_yards,
+                    fantasy_points_ppr=ps.fantasy_points_ppr,
+                )
+                db.add(derived)
+                count += 1
+
+            logger.info(f"  {season}: {count} derived stat records computed")
+
+        if not dry_run:
+            await db.commit()
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Ingest player stats from nflverse")
     parser.add_argument(
@@ -705,7 +834,7 @@ async def main():
     )
     parser.add_argument("--dry-run", action="store_true", help="Don't write to DB")
     parser.add_argument(
-        "--steps", nargs="+", type=int, default=[1, 2, 3, 4, 5],
+        "--steps", nargs="+", type=int, default=[1, 2, 3, 4, 5, 6],
         help="Which steps to run (default: all)",
     )
     parser.add_argument(
@@ -745,6 +874,8 @@ async def main():
         await step4_aggregate_seasons(dirty_seasons, dry_run=args.dry_run)
     if 5 in args.steps and dirty_seasons:
         await step5_snap_counts(dirty_seasons, dry_run=args.dry_run)
+    if 6 in args.steps and dirty_seasons:
+        await step6_compute_derived_stats(dirty_seasons, dry_run=args.dry_run)
 
     logger.info("Done!")
 
