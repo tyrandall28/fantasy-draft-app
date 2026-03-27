@@ -168,12 +168,12 @@ When a user clicks any player name (in rankings, draft board, available players 
 
 ### Implementation Order
 
-- [ ] **Step 1:** Add `nfl_data_py` to requirements, write a roster ingestion script that populates external IDs on existing Player rows and creates any missing players
-- [ ] **Step 2:** Design and create Alembic migrations for `player_bio`, `player_seasons`, `player_weekly_stats` tables and the new ID columns on `Player`
-- [ ] **Step 3:** Write seasonal stats ingestion script (pull from nfl_data_py, match via gsis_id, populate player_seasons)
-- [ ] **Step 4:** Write bio/combine ingestion script
-- [ ] **Step 5:** Write weekly stats ingestion script
-- [ ] **Step 6:** Create API endpoints: `GET /api/players/{id}/stats`, `GET /api/players/{id}/bio`, `GET /api/players/{id}/weekly?season=2025`
+- [x] **Step 1:** Add `nflreadpy` to requirements, write roster ingestion script (populates external IDs, creates missing players — 278 matched, 2,938 created)
+- [x] **Step 2:** Create Alembic migrations for `player_bio`, `player_seasons`, `player_weekly_stats` tables and external ID columns on `Player`
+- [x] **Step 3:** Write weekly stats ingestion script (29,410 game logs from nflreadpy)
+- [x] **Step 4:** Write bio/combine ingestion script (3,215 player bios with combine measurables)
+- [x] **Step 5:** Write seasonal stats aggregation + snap counts merge (3,081 season rows, snap counts from nflverse)
+- [ ] **Step 6:** Create API endpoints: `GET /api/players/{id}/stats`, `GET /api/players/{id}/bio`, `GET /api/players/{id}/weekly?season=2024`
 - [ ] **Step 7:** Build player card modal component on frontend
 - [ ] **Step 8:** Wire player card into rankings page, draft board, and available players list
 - [ ] **Step 9:** Add charts/visualizations (sparklines, radar chart)

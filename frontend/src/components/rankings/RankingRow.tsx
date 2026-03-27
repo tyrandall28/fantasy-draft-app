@@ -1,5 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { UserRankingEntry } from "../../types";
 
 const POS_COLORS: Record<string, string> = {
@@ -21,6 +22,7 @@ interface Props {
 export default function RankingRow({ entry, displayRank, onToggleLock, diff }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: entry.id, disabled: entry.is_locked });
+  const { openPlayerCard } = usePlayerCard();
 
   const posColor = POS_COLORS[entry.player.position] ?? "bg-slate-500/20 text-slate-400";
 
@@ -45,7 +47,11 @@ export default function RankingRow({ entry, displayRank, onToggleLock, diff }: P
       <div className="text-slate-500 font-mono text-xs">
         {displayRank}
       </div>
-      <div className="font-medium text-slate-200 truncate min-w-0">
+      <div
+        className="font-medium text-slate-200 truncate min-w-0 cursor-pointer hover:text-sky-400 transition-colors"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => openPlayerCard(entry.player.id)}
+      >
         {entry.player.full_name}
       </div>
       <div>

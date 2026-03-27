@@ -12,6 +12,7 @@ A full-stack fantasy football draft application that lets users create custom pl
 | Real-time | WebSockets (native FastAPI) |
 | Auth | JWT (email/password) |
 | Drag & Drop | @dnd-kit |
+| Player Stats | nflreadpy (nflverse) |
 
 ## Features
 
@@ -32,6 +33,13 @@ A full-stack fantasy football draft application that lets users create custom pl
 - Share a 12-character invite code for friends to join
 - Lobby page shows all members, settings, and draft order
 - Commissioner can randomize draft order and start the draft
+
+### Player Stats & Analytics
+- Comprehensive player database with 3,300+ players and cross-source identity resolution (gsis_id, espn_id, sleeper_id, yahoo_id, pfr_id)
+- Player bio data: height, weight, college, NFL Draft capital, NFL Combine measurables (40-yard dash, bench press, vertical jump, broad jump, 3-cone, shuttle)
+- 5 years of seasonal stats (2020-2024): passing, rushing, receiving, kicking, fantasy points, snap counts
+- 29,000+ weekly game logs with per-game breakdowns and opponent data
+- Data sourced from nflverse via `nflreadpy` — free, no API keys, regularly updated
 
 ### Live Draft
 - Real-time WebSocket-powered draft room
@@ -57,17 +65,19 @@ fantasy-draft-app/
 │       ├── main.py             # FastAPI app entry point
 │       ├── config.py           # Settings via environment variables
 │       ├── database.py         # Async SQLAlchemy engine + session
-│       ├── models/             # SQLAlchemy models (User, Player, BaseRanking, UserRanking, League, LeagueMember, DraftPick)
+│       ├── models/             # SQLAlchemy models (User, Player, PlayerBio, PlayerSeason, PlayerWeeklyStat, BaseRanking, UserRanking, League, LeagueMember, DraftPick)
 │       ├── schemas/            # Pydantic request/response models
 │       ├── api/                # REST endpoints (auth, players, rankings, leagues, drafts)
 │       ├── ws/                 # WebSocket draft room manager
 │       ├── services/           # Business logic (auth, rankings, draft)
 │       └── seeds/              # Seed script + player data JSON
-├── rankings_ingester/          # Standalone module for fetching fresh rankings
-│   ├── main.py                 # CLI entry point (python -m rankings_ingester.main)
+├── rankings_ingester/          # Data ingestion modules
+│   ├── main.py                 # Rankings CLI (python -m rankings_ingester.main)
+│   ├── ingest_stats.py         # Player stats CLI (python -m rankings_ingester.ingest_stats)
 │   ├── loader.py               # DB upsert logic (players + base_rankings)
 │   └── sources/
-│       └── espn.py             # ESPN PPR top 300 fetcher
+│       ├── espn.py             # ESPN PPR top 300 fetcher
+│       └── sleeper.py          # Sleeper PPR ADP fetcher
 └── frontend/
     ├── package.json
     ├── Dockerfile
@@ -167,7 +177,38 @@ PYTHONPATH=. python -m rankings_ingester.main --source espn_ppr --year 2025
 
 **Adding new sources:** Register a new fetch function in `rankings_ingester/main.py`'s `SOURCES` dict and create a corresponding fetcher in `rankings_ingester/sources/`.
 
-### 5. Start the backend server
+### 5. Ingest player stats (bio, seasonal, weekly)
+
+The stats ingester pulls comprehensive player data from [nflverse](https://github.com/nflverse) via the `nflreadpy` package. This populates external IDs, bio/combine data, seasonal stats, weekly game logs, and snap counts.
+
+```bash
+# From the backend/ directory with venv activated
+
+# Run all 5 steps for the default seasons (2020-2024)
+PYTHONPATH=. python -m rankings_ingester.ingest_stats
+
+# Specify seasons
+PYTHONPATH=. python -m rankings_ingester.ingest_stats --seasons 2022 2023 2024
+
+# Run specific steps only
+PYTHONPATH=. python -m rankings_ingester.ingest_stats --steps 1 2
+
+# Preview without writing to DB
+PYTHONPATH=. python -m rankings_ingester.ingest_stats --dry-run
+```
+
+**Steps:**
+| Step | What it does |
+|------|-------------|
+| 1 | Loads nflverse player IDs → populates `gsis_id`, `espn_id`, `sleeper_id`, `yahoo_id`, `pfr_id` on Player rows, creates missing players |
+| 2 | Loads bio + combine data → populates `player_bio` table (height, weight, college, draft info, 40-yard dash, etc.) |
+| 3 | Loads weekly player stats → populates `player_weekly_stats` (passing, rushing, receiving, kicking, fantasy points per game) |
+| 4 | Aggregates weekly stats → populates `player_seasons` (season totals) |
+| 5 | Loads snap counts → merges into weekly stats and season aggregates |
+
+**Data volume:** ~3,200 players, ~3,000 season rows, ~29,000 weekly stat rows for 5 seasons. Takes ~2 minutes to run.
+
+### 6. Start the backend server
 
 ```bash
 uvicorn app.main:app --reload --port 8000
@@ -175,7 +216,7 @@ uvicorn app.main:app --reload --port 8000
 
 The API will be available at `http://localhost:8000`. You can view the auto-generated docs at `http://localhost:8000/docs`.
 
-### 6. Set up and start the frontend
+### 7. Set up and start the frontend
 
 ```bash
 cd frontend
@@ -221,6 +262,9 @@ The backend reads settings from environment variables prefixed with `APP_`:
 | POST | `/api/auth/refresh` | Refresh JWT |
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/players` | List players (`?position=QB&search=mahomes`) |
+| GET | `/api/players/{id}/stats` | Player career stats (all seasons) |
+| GET | `/api/players/{id}/bio` | Player bio + combine data |
+| GET | `/api/players/{id}/weekly?season=2024` | Weekly game logs for a season |
 | GET | `/api/players/base-rankings?source=espn_ppr` | Base ranking list |
 | GET | `/api/rankings/sources` | Available base ranking sources |
 | GET | `/api/rankings` | User's custom ranking lists |

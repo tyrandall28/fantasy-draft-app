@@ -16,7 +16,95 @@ export interface Player {
   full_name: string;
   position: string;
   nfl_team: string;
-  bye_week: number;
+  bye_week: number | null;
+  headshot_url: string | null;
+}
+
+export interface PlayerBio {
+  player_id: number;
+  height_inches: number | null;
+  weight_lbs: number | null;
+  birth_date: string | null;
+  college: string | null;
+  draft_year: number | null;
+  draft_round: number | null;
+  draft_pick: number | null;
+  draft_overall: number | null;
+  years_exp: number | null;
+  forty_yard_dash: number | null;
+  bench_press: number | null;
+  vertical_jump: number | null;
+  broad_jump: number | null;
+  three_cone: number | null;
+  shuttle: number | null;
+}
+
+export interface PlayerSeason {
+  season: number;
+  games_played: number | null;
+  pass_attempts: number | null;
+  pass_completions: number | null;
+  pass_yards: number | null;
+  pass_tds: number | null;
+  interceptions: number | null;
+  sacks: number | null;
+  pass_epa: number | null;
+  rush_attempts: number | null;
+  rush_yards: number | null;
+  rush_tds: number | null;
+  rush_fumbles: number | null;
+  rush_epa: number | null;
+  targets: number | null;
+  receptions: number | null;
+  rec_yards: number | null;
+  rec_tds: number | null;
+  rec_yards_after_catch: number | null;
+  rec_epa: number | null;
+  target_share: number | null;
+  fg_made: number | null;
+  fg_att: number | null;
+  fg_pct: number | null;
+  fg_long: number | null;
+  pat_made: number | null;
+  pat_att: number | null;
+  special_teams_tds: number | null;
+  fantasy_points: number | null;
+  fantasy_points_ppr: number | null;
+  snap_count: number | null;
+  snap_pct: number | null;
+}
+
+export interface PlayerWeekly {
+  season: number;
+  week: number;
+  opponent: string | null;
+  team: string | null;
+  pass_attempts: number | null;
+  pass_completions: number | null;
+  pass_yards: number | null;
+  pass_tds: number | null;
+  interceptions: number | null;
+  rush_attempts: number | null;
+  rush_yards: number | null;
+  rush_tds: number | null;
+  targets: number | null;
+  receptions: number | null;
+  rec_yards: number | null;
+  rec_tds: number | null;
+  rec_yards_after_catch: number | null;
+  target_share: number | null;
+  fg_made: number | null;
+  fg_att: number | null;
+  fantasy_points: number | null;
+  fantasy_points_ppr: number | null;
+  snap_count: number | null;
+  snap_pct: number | null;
+}
+
+export interface PlayerDetail {
+  player: Player;
+  bio: PlayerBio | null;
+  seasons: PlayerSeason[];
 }
 
 export interface BaseRankingEntry {

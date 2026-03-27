@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
+import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { Player, UserRanking, UserRankingDetail } from "../../types";
 
 const POS_BADGE: Record<string, string> = {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function AvailablePlayerList({ draftedPlayerIds, onPick, canPick }: Props) {
+  const { openPlayerCard } = usePlayerCard();
   const [rankings, setRankings] = useState<UserRanking[]>([]);
   const [selectedRankingId, setSelectedRankingId] = useState<string>("");
   const [rankingDetail, setRankingDetail] = useState<UserRankingDetail | null>(null);
@@ -130,8 +132,13 @@ export default function AvailablePlayerList({ draftedPlayerIds, onPick, canPick 
                 {p.position}
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-200 truncate">{p.full_name}</p>
-                <p className="text-[10px] text-slate-500">{p.nfl_team} &middot; Bye {p.bye_week}</p>
+                <p
+                  className="text-xs font-medium text-slate-200 truncate cursor-pointer hover:text-sky-400 transition-colors"
+                  onClick={() => openPlayerCard(p.id)}
+                >
+                  {p.full_name}
+                </p>
+                <p className="text-[10px] text-slate-500">{p.nfl_team}{p.bye_week ? ` · Bye ${p.bye_week}` : ""}</p>
               </div>
             </div>
             <button

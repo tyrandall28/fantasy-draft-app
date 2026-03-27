@@ -1,3 +1,4 @@
+import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { DraftState } from "../../types";
 
 // Sleeper-style bold position colors — left border accent + cell background
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function DraftBoard({ state, userId }: Props) {
+  const { openPlayerCard } = usePlayerCard();
   const { picks, team_count, roster_size, draft_order } = state;
   const rounds = roster_size;
   const pickMap = new Map(picks.map((p) => [p.overall_pick, p]));
@@ -96,7 +98,10 @@ export default function DraftBoard({ state, userId }: Props) {
                         >
                           {pick ? (
                             <>
-                              <span className="text-white font-semibold text-sm leading-tight truncate w-full">
+                              <span
+                                className="text-white font-semibold text-sm leading-tight truncate w-full cursor-pointer hover:text-sky-300 transition-colors"
+                                onClick={() => openPlayerCard(pick.player.id)}
+                              >
                                 {pick.player.full_name}
                               </span>
                               <span className={`text-xs leading-tight font-medium mt-0.5 ${pos!.text}`}>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
+import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { BaseRankingEntry, UserRankingEntry } from "../../types";
 
 const POS_COLORS: Record<string, string> = {
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function SourceComparisonPanel({ sources, userEntries, initialSource, onBaseEntriesLoaded }: Props) {
+  const { openPlayerCard } = usePlayerCard();
   const [selectedSource, setSelectedSource] = useState(initialSource || sources[0]?.value || "");
   const [baseEntries, setBaseEntries] = useState<BaseRankingEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,7 +137,7 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500" />
         </div>
       ) : showAnalysis ? (
-        <AnalysisView risers={risers} fallers={fallers} sourceName={sources.find((s) => s.value === selectedSource)?.label || selectedSource} />
+        <AnalysisView risers={risers} fallers={fallers} sourceName={sources.find((s) => s.value === selectedSource)?.label || selectedSource} onPlayerClick={openPlayerCard} />
       ) : (
         <div className="flex-1 overflow-y-auto">
           {filteredBase.map((entry) => (
@@ -147,7 +149,10 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
                 <div className="text-slate-500 font-mono text-xs">
                   {entry.rank}
                 </div>
-                <div className="font-medium text-slate-200 truncate min-w-0">
+                <div
+                  className="font-medium text-slate-200 truncate min-w-0 cursor-pointer hover:text-sky-400 transition-colors"
+                  onClick={() => openPlayerCard(entry.player.id)}
+                >
                   {entry.player.full_name}
                 </div>
                 <div>
@@ -173,10 +178,12 @@ function AnalysisView({
   risers,
   fallers,
   sourceName,
+  onPlayerClick,
 }: {
-  risers: { player: { full_name: string; position: string; nfl_team: string }; userRank: number; sourceRank: number; diff: number }[];
-  fallers: { player: { full_name: string; position: string; nfl_team: string }; userRank: number; sourceRank: number; diff: number }[];
+  risers: { player: { id: number; full_name: string; position: string; nfl_team: string }; userRank: number; sourceRank: number; diff: number }[];
+  fallers: { player: { id: number; full_name: string; position: string; nfl_team: string }; userRank: number; sourceRank: number; diff: number }[];
   sourceName: string;
+  onPlayerClick: (playerId: number) => void;
 }) {
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-4">
@@ -211,7 +218,7 @@ function AnalysisView({
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${POS_COLORS[d.player.position] ?? ""}`}>
                   {d.player.position}
                 </span>
-                <span className="text-slate-200 truncate flex-1">{d.player.full_name}</span>
+                <span className="text-slate-200 truncate flex-1 cursor-pointer hover:text-sky-400 transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
                 <span className="text-slate-600 text-xs flex-shrink-0">
                   #{d.userRank} vs #{d.sourceRank}
                 </span>
@@ -236,7 +243,7 @@ function AnalysisView({
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${POS_COLORS[d.player.position] ?? ""}`}>
                   {d.player.position}
                 </span>
-                <span className="text-slate-200 truncate flex-1">{d.player.full_name}</span>
+                <span className="text-slate-200 truncate flex-1 cursor-pointer hover:text-sky-400 transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
                 <span className="text-slate-600 text-xs flex-shrink-0">
                   #{d.userRank} vs #{d.sourceRank}
                 </span>

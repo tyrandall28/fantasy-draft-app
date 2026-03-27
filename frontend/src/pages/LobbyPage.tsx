@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { usePlayerCard } from "../context/PlayerCardContext";
 import type { League, UserRanking, UserRankingDetail } from "../types";
 import BottomPanel from "../components/draft/BottomPanel";
 
@@ -21,6 +22,7 @@ const POSITION_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "K", "DST", "BN"];
 export default function LobbyPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { openPlayerCard } = usePlayerCard();
   const navigate = useNavigate();
   const [league, setLeague] = useState<League | null>(null);
   const [loading, setLoading] = useState(true);
@@ -307,7 +309,10 @@ export default function LobbyPage() {
                       {entry.player.position}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-slate-200 truncate">{entry.player.full_name}</p>
+                      <p
+                        className="text-xs font-medium text-slate-200 truncate cursor-pointer hover:text-sky-400 transition-colors"
+                        onClick={() => openPlayerCard(entry.player_id)}
+                      >{entry.player.full_name}</p>
                       <p className="text-[10px] text-slate-500">{entry.player.nfl_team}</p>
                     </div>
                   </div>

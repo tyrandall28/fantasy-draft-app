@@ -1,3 +1,4 @@
+import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { DraftState } from "../../types";
 
 const POS_COLORS: Record<string, string> = {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function TeamRosterPanel({ state, userId }: Props) {
+  const { openPlayerCard } = usePlayerCard();
   // Find which draft_order index is ours (first occurrence only)
   const myDraftIndex = state.draft_order.indexOf(userId ?? "");
 
@@ -50,7 +52,10 @@ export default function TeamRosterPanel({ state, userId }: Props) {
               <span className={`text-xs font-bold ${POS_COLORS[pick.player.position] ?? "text-slate-400"}`}>
                 {pick.player.position}
               </span>
-              <span className="text-sm text-slate-200 truncate">{pick.player.full_name}</span>
+              <span
+                className="text-sm text-slate-200 truncate cursor-pointer hover:text-sky-400 transition-colors"
+                onClick={() => openPlayerCard(pick.player.id)}
+              >{pick.player.full_name}</span>
               <span className="text-xs text-slate-500 ml-auto flex-shrink-0">{pick.player.nfl_team}</span>
               {pick.is_auto && (
                 <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 rounded flex-shrink-0">Auto</span>

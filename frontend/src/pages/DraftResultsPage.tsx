@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiFetch } from "../api/client";
+import { usePlayerCard } from "../context/PlayerCardContext";
 
 interface RosterPlayer {
   player_id: number;
@@ -13,6 +14,7 @@ interface RosterPlayer {
 
 export default function DraftResultsPage() {
   const { id } = useParams<{ id: string }>();
+  const { openPlayerCard } = usePlayerCard();
   const [rosters, setRosters] = useState<Record<string, RosterPlayer[]>>({});
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +52,10 @@ export default function DraftResultsPage() {
                 >
                   <span className="text-gray-400 text-xs w-6">R{p.round_num}</span>
                   <span className="font-medium text-xs text-gray-600 w-8">{p.position}</span>
-                  <span className="text-gray-900">{p.full_name}</span>
+                  <span
+                    className="text-gray-900 cursor-pointer hover:text-sky-600 transition-colors"
+                    onClick={() => openPlayerCard(p.player_id)}
+                  >{p.full_name}</span>
                   <span className="text-gray-400 text-xs ml-auto">{p.nfl_team}</span>
                 </div>
               ))}
