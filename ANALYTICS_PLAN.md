@@ -160,6 +160,133 @@ These are server-computed, cached, and displayed in the draft page bottom panel 
 
 ---
 
+### 7. "Who Should I Draft?" — Position Scarcity via Value Over Replacement
+
+**What it is:** A decision-support widget that shows the user which positions to prioritize in their draft, based on how much elite players at each position beat the "replacement-level" player you'd otherwise settle for later. Lives in the no-selection state of the rankings page analytics panel (`PositionOverviewView`).
+
+**Core concept — Value Over Replacement (VOR):**
+
+A player's draft value isn't their raw points — it's how much they beat the worst player you'd still consider a "starter" at that position. A 20 PPG QB isn't as valuable as a 20 PPG RB if QB12 also scores 17 but RB30 scores 9. The RB gives you +11 over replacement, the QB only +3. This methodology is known as **Value-Based Drafting (VBD)** and is the foundation of serious fantasy draft theory.
+
+**Formula:**
+```
+VOR(player) = player_ppr_per_game − replacement_ppg(position)
+replacement_ppg(pos) = PPG of the Nth-best player at that position
+```
+
+**Default replacement thresholds (12-team standard league):**
+
+| Position | N (replacement rank) | Rationale |
+|----------|---------------------|-----------|
+| QB | 12 | 1 starter × 12 teams |
+| RB | 30 | 2 starters × 12 teams + ~half the FLEX slots |
+| WR | 36 | 2 starters × 12 teams + ~half the FLEX + modern 3-WR trends |
+| TE | 12 | 1 starter × 12 teams |
+| K | 12 | 1 starter × 12 teams |
+| DST | 12 | 1 starter × 12 teams |
+
+Thresholds are parameters, not constants — a future league-aware version can compute them from `roster_slots × num_teams`.
+
+---
+
+#### Three widgets in PositionOverviewView
+
+All three are derived from the position-rankings data already fetched by `useAnalyticsData` — no backend work required.
+
+##### Widget 1: Draft Priority Board
+
+A ranked list of positions by the VOR of their top-tier players (average VOR of the top 5 at each position). Tells the user at a glance *"RBs drop off hardest — grab them early. QBs are flat — wait."*
+
+```
+1. RB   +11.4 VOR  ████████████  ← steepest cliff
+2. WR    +9.2      █████████
+3. TE    +6.1      ██████
+4. QB    +3.8      ████         ← flattest, wait
+```
+
+Each row: position badge, average top-5 VOR, horizontal bar (normalized to the max VOR).
+
+##### Widget 2: Position Value Curves
+
+A single Recharts `LineChart` with all four skill positions overlaid. X = positional rank (1 to ~36), Y = PPR/game. A dotted horizontal line marks each position's replacement level. The steepness of each line visualizes the scarcity story — steep = draft early, flat = wait.
+
+This is the most visual piece: users see *where* the cliffs are, not just that they exist.
+
+##### Widget 3: Tier Break Detection
+
+Auto-detect natural tier boundaries by finding PPG drops that exceed `mean + k × stddev` of the step-to-step differences within each position (start with k = 1.0, tune by eye). Display as compact rows:
+
+```
+RB  │ T1: #1–#4  │ T2: #5–#11  │ T3: #12–#18  │ T4: #19–#30
+WR  │ T1: #1–#6  │ T2: #7–#14  │ T3: #15–#24 │ ...
+```
+
+This is the most actionable piece — it tells the user *"if you miss RB5, wait until the tier 3 run because T2 is flat."*
+
+---
+
+#### Why this fits the rankings page
+
+The user is building a personal ranking *before* the draft — they need to know which positions to prioritize, not who's "still available." VOR + tiers answer exactly that question without needing live draft state. The widgets live in the 0-selected state of the analytics side panel, turning the empty state into actionable pre-draft guidance.
+
+---
+
+#### Future extension path — live draft advisor
+
+The key architectural insight: **VOR is stateless computation over a player pool.** The static version is literally the identity case of the dynamic version where `drafted_set = ∅`. The math doesn't change — remove drafted players from the pool, recompute, re-render. This makes the extension path essentially free if v1 is built correctly.
+
+```
+static  → VOR(p) = p.ppg − replacement_ppg(all_players)
+dynamic → VOR(p) = p.ppg − replacement_ppg(all_players − drafted)
+```
+
+##### Tier 1 — Live draft updates
+
+Subscribe to the existing WebSocket `DraftRoomManager`, maintain a `draftedIds: Set<number>`, pass `pool.filter(p => !draftedIds.has(p.id))` into the same compute functions. Draft board auto-updates on every pick. Zero new math, one new data source. The replacement threshold naturally shifts as each position gets depleted — if 20 RBs are gone, the "last starter" is now a much worse player, the cliff gets steeper, the priority board re-ranks on its own.
+
+##### Tier 2 — Hypothetical picks
+
+The user hovers or clicks a player and sees *"what happens if I take them?"* Clone the pool, remove the hypothetical pick, recompute, render a **delta view**:
+
+> *"RB priority unchanged at +11.4. WR drops from +9.2 to +7.1. Your next best WR tier break is now at pick #18."*
+
+This is just `compute(pool) → compute(pool − {hypothetical})` and a diff. Because the computation is cheap enough to run on every hover, the interaction can feel exploratory rather than prescriptive.
+
+##### Tier 3 — Snake-draft simulation (the killer feature)
+
+Between the user's pick #24 and pick #25 in a 12-team snake, ~22 other players will be taken. Estimate them by having each phantom team grab their current best-VOR available, with a bit of noise for realism. Now the tool can answer the *actual* draft question:
+
+> *"If I take Garrett Wilson here, what's the RB landscape at my next pick?"*
+
+Not "best available now" — **best available at your next turn**, which is the real decision being made. Show two panels side by side: "Take WR now" vs "Take RB now," each projecting forward to the user's next pick and showing the VOR of what'll be left:
+
+> *"Taking WR leaves me with RB #18 at +4.1 VOR. Taking RB leaves me with WR #14 at +5.8 VOR."*
+
+That's a decision-making tool, not an instruction. The user poses hypotheticals; the tool shows consequences. This is meaningfully different from ESPN's "draft this player next" because it respects the user's autonomy and lets them explore trade-offs rather than forcing a single answer.
+
+---
+
+#### v1 architecture — keeping the door open
+
+To make Tiers 1–3 drop-in extensions, v1 follows this structure:
+
+1. **Pure compute functions** in `src/lib/draftValue.ts`:
+   - `computeVOR(pool: PlayerDerivedStats[], thresholds: Record<Position, number>)`
+   - `detectTiers(sortedByPPG: PlayerDerivedStats[], sigmaK: number)`
+   - `computePriorityBoard(pool, thresholds)`
+
+   None of these know about the UI or about "drafted players" — they take a pool and return annotated data. To extend, pass a filtered pool.
+
+2. **A hook `useDraftValueAnalysis(pool, options)`** wraps the pure functions. Later, a `useLiveDraftValue(leagueId)` can subscribe to the WS stream, maintain the drafted set, and call the same compute path with the filtered pool.
+
+3. **PositionOverviewView renders from the hook output**, not from raw position data. When the hook later returns live-updated VORs, the view doesn't need to change.
+
+4. **Replacement thresholds are an explicit parameter**, not hardcoded. Shape is `{QB: 12, RB: 30, ...}` so a future league-aware version can compute from `roster_slots × num_teams`.
+
+**Effort estimate for future tiers given this foundation:** Tier 1 is roughly a half-day of work. Tier 2 is a couple hours on top of that. Tier 3 is larger because the simulation logic is new, but the VOR engine underneath is unchanged.
+
+---
+
 ## Paid Tier — Custom Query Builder ("The Terminal")
 
 ### Concept
@@ -259,7 +386,7 @@ LIMIT:  [top N]             → Top 10, Top 25, Top 50
 ### Phase 3 — Advanced Free Tier
 8. Player comparison radar chart
 9. Target share vs. air yards quadrant chart
-10. "Who should I draft?" position scarcity indicator
+10. "Who should I draft?" position scarcity indicator (see dedicated section below)
 
 ### Phase 4 — Paid Tier
 11. Custom query builder UI
@@ -274,5 +401,5 @@ LIMIT:  [top N]             → Top 10, Top 25, Top 50
 - [x] **Charting library:** Recharts — simple, React-native, covers all chart types we need (scatter, radar, line, sparkline)
 - [x] **Sparklines:** Client-side rendering
 - [x] **Multi-season weighting:** Weighted by games played (a 17-game season counts more than a 6-game injured season)
-- [x] **Position scarcity indicator:** Deferred to Phase 3 — will define "remaining value" methodology then
+- [x] **Position scarcity indicator:** Use Value Over Replacement (VOR / VBD) — see "Who Should I Draft?" section above. Static v1 in `PositionOverviewView`; Tier 1/2/3 extension path defined for live drafts, hypothetical picks, and snake-draft simulation.
 - [x] **Analytics page:** Standalone `/analytics` page first, then embed widgets into draft bottom panel later

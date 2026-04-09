@@ -21,9 +21,11 @@ interface Props {
   onReorder: (entryIds: number[]) => Promise<void>;
   onToggleLock: (entryId: number, locked: boolean) => Promise<void>;
   comparisonBaseEntries?: BaseRankingEntry[];
+  selectedPlayerIds?: number[];
+  onPlayerSelect?: (playerId: number) => void;
 }
 
-export default function RankingList({ ranking, onReorder, onToggleLock, comparisonBaseEntries }: Props) {
+export default function RankingList({ ranking, onReorder, onToggleLock, comparisonBaseEntries, selectedPlayerIds, onPlayerSelect }: Props) {
   const [filter, setFilter] = useState("");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -115,6 +117,8 @@ export default function RankingList({ ranking, onReorder, onToggleLock, comparis
                   displayRank={displayRank}
                   onToggleLock={onToggleLock}
                   diff={diff}
+                  isSelected={selectedPlayerIds?.includes(entry.player.id) ?? false}
+                  onSelect={onPlayerSelect}
                 />
               );
             })}

@@ -1,0 +1,231 @@
+import { useMemo } from "react";
+import Sparkline from "../analytics/Sparkline";
+import WeeklyTrendChart from "../analytics/WeeklyTrendChart";
+import type {
+  PlayerDerivedStats,
+  PlayerWeekly,
+  SparklinePoint,
+  UserRankingEntry,
+} from "../../types";
+
+const POS_COLORS: Record<string, string> = {
+  QB: "bg-red-500/20 text-red-400",
+  RB: "bg-emerald-500/20 text-emerald-400",
+  WR: "bg-sky-500/20 text-sky-400",
+  TE: "bg-amber-500/20 text-amber-400",
+  K: "bg-purple-500/20 text-purple-400",
+  DST: "bg-slate-500/20 text-slate-400",
+};
+
+interface StatDef {
+  key: keyof PlayerDerivedStats;
+  label: string;
+  format: (v: number | null) => string;
+}
+
+const fmt1 = (v: number | null) => (v != null ? v.toFixed(1) : "-");
+const fmt2 = (v: number | null) => (v != null ? v.toFixed(2) : "-");
+const fmtPct = (v: number | null) => (v != null ? `${v.toFixed(1)}%` : "-");
+
+const KEY_STATS: Record<string, StatDef[]> = {
+  QB: [
+    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "pass_yards_per_game", label: "Pass Y/G", format: fmt1 },
+    { key: "tds_per_game", label: "TDs/G", format: fmt2 },
+    { key: "completion_pct", label: "Comp%", format: fmtPct },
+  ],
+  RB: [
+    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "rush_yards_per_game", label: "Rush Y/G", format: fmt1 },
+    { key: "yards_per_carry", label: "YPC", format: fmt2 },
+    { key: "targets_per_game", label: "Tgt/G", format: fmt1 },
+  ],
+  WR: [
+    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "rec_yards_per_game", label: "Rec Y/G", format: fmt1 },
+    { key: "targets_per_game", label: "Tgt/G", format: fmt1 },
+    { key: "target_share", label: "Tgt Share", format: fmtPct },
+  ],
+  TE: [
+    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "rec_yards_per_game", label: "Rec Y/G", format: fmt1 },
+    { key: "targets_per_game", label: "Tgt/G", format: fmt1 },
+    { key: "catch_rate", label: "Catch%", format: fmtPct },
+  ],
+  K: [
+    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "fg_pct", label: "FG%", format: fmtPct },
+    { key: "fg_made_per_game", label: "FG/G", format: fmt2 },
+    { key: "xp_pct", label: "XP%", format: fmtPct },
+  ],
+};
+
+/** Compute percentile (0-100) of a value within a sorted ascending array */
+function percentileOf(sortedVals: number[], value: number): number {
+  if (sortedVals.length <= 1) return 50;
+  let below = 0;
+  for (const v of sortedVals) {
+    if (v < value) below++;
+    else break;
+  }
+  return Math.round((below / (sortedVals.length - 1)) * 100);
+}
+
+interface Props {
+  entry: UserRankingEntry;
+  stats: PlayerDerivedStats | null;
+  positionGroup: PlayerDerivedStats[];
+  sparkline: SparklinePoint[];
+  weekly: PlayerWeekly[];
+  loading: boolean;
+  /** Color accent for the header (used in compare mode) */
+  accentColor?: string;
+  /** Compact mode reduces some spacing for side-by-side layout */
+  compact?: boolean;
+}
+
+/**
+ * Full analytics column for a single player. Used by both SinglePlayerView
+ * and ComparePlayersView (two of them side-by-side).
+ */
+export default function PlayerAnalyticsColumn({
+  entry,
+  stats,
+  positionGroup,
+  sparkline,
+  weekly,
+  loading,
+  accentColor,
+  compact = false,
+}: Props) {
+  const position = entry.player.position;
+  const statDefs = KEY_STATS[position] ?? KEY_STATS["WR"];
+
+  const sortedByMetric = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const def of statDefs) {
+      const vals = positionGroup
+        .map((p) => p[def.key] as number | null)
+        .filter((v): v is number => v != null)
+        .sort((a, b) => a - b);
+      map.set(def.key, vals);
+    }
+    return map;
+  }, [positionGroup, statDefs]);
+
+  const posColor = POS_COLORS[position] ?? "bg-slate-500/20 text-slate-400";
+  const gridCols = compact ? "grid-cols-2" : "grid-cols-2";
+
+  return (
+    <div className={compact ? "space-y-3" : "space-y-5"}>
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded ${posColor}`}>
+            {position}
+          </span>
+          <h3
+            className={`${compact ? "text-sm" : "text-lg"} font-bold truncate`}
+            style={accentColor ? { color: accentColor } : { color: "#ffffff" }}
+          >
+            {entry.player.full_name}
+          </h3>
+        </div>
+        <p className="text-xs text-slate-500">
+          {entry.player.nfl_team}
+          {entry.player.bye_week ? ` · Bye ${entry.player.bye_week}` : ""} · Rank #{entry.rank}
+        </p>
+      </div>
+
+      {/* Loading / no-stats states */}
+      {!stats && !loading && (
+        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 text-center">
+          <p className="text-xs text-slate-500">No season stats available.</p>
+        </div>
+      )}
+      {loading && !stats && (
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-500" />
+        </div>
+      )}
+
+      {/* Key stats grid with percentile bars */}
+      {stats && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            Key Stats ({stats.season})
+          </h4>
+          <div className={`grid ${gridCols} gap-2`}>
+            {statDefs.map((def) => {
+              const raw = stats[def.key] as number | null;
+              const sorted = sortedByMetric.get(def.key) ?? [];
+              const pct = raw != null ? percentileOf(sorted, raw) : 0;
+              const barColor =
+                pct >= 75
+                  ? "bg-emerald-400"
+                  : pct >= 50
+                  ? "bg-sky-400"
+                  : pct >= 25
+                  ? "bg-amber-400"
+                  : "bg-red-400";
+              return (
+                <div
+                  key={def.key}
+                  className="bg-white/[0.02] border border-white/5 rounded-lg p-2"
+                >
+                  <p className="text-[9px] uppercase tracking-wide text-slate-500">{def.label}</p>
+                  <p className={`${compact ? "text-sm" : "text-lg"} font-mono font-semibold text-slate-100`}>
+                    {def.format(raw)}
+                  </p>
+                  <div className="mt-1 flex items-center gap-1">
+                    <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${barColor} rounded-full transition-all duration-500`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-slate-500 font-mono w-5 text-right">
+                      {pct}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Career sparkline */}
+      {sparkline.length >= 2 && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+            Career Trend (PPR/G)
+          </h4>
+          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 flex items-center gap-3">
+            <Sparkline data={sparkline} width={compact ? 140 : 200} height={36} />
+            <div className="flex gap-2 text-xs text-slate-500 flex-wrap">
+              {sparkline.map((s) => (
+                <div key={s.season} className="text-center">
+                  <p className="text-[9px] text-slate-600">'{String(s.season).slice(-2)}</p>
+                  <p className="font-mono text-[11px] text-slate-300">
+                    {s.ppr_per_game != null ? s.ppr_per_game.toFixed(1) : "-"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly trend chart */}
+      {weekly.length > 0 && position !== "DST" && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+            Weekly Trend
+          </h4>
+          <WeeklyTrendChart weeks={weekly} position={position} />
+        </div>
+      )}
+    </div>
+  );
+}

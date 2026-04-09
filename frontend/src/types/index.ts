@@ -224,6 +224,14 @@ export interface PlayerDerivedStats {
   fantasy_points_ppr: number | null;
 }
 
+export interface SparklinePoint {
+  season: number;
+  ppr_per_game: number | null;
+  games_played: number;
+}
+
+export type SparklineData = Record<number, SparklinePoint[]>;
+
 export interface DraftState {
   picks: DraftPick[];
   current_pick: number;

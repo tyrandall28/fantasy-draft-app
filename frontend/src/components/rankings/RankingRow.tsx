@@ -17,9 +17,11 @@ interface Props {
   displayRank: number;
   onToggleLock: (entryId: number, locked: boolean) => void;
   diff: number | null;
+  isSelected?: boolean;
+  onSelect?: (playerId: number) => void;
 }
 
-export default function RankingRow({ entry, displayRank, onToggleLock, diff }: Props) {
+export default function RankingRow({ entry, displayRank, onToggleLock, diff, isSelected, onSelect }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: entry.id, disabled: entry.is_locked });
   const { openPlayerCard } = usePlayerCard();
@@ -38,21 +40,29 @@ export default function RankingRow({ entry, displayRank, onToggleLock, diff }: P
         gap: "0.5rem",
         gridTemplateColumns: hasDiff ? "1fr 4fr 2fr 2fr 1fr 1fr 2fr" : "1fr 4fr 2fr 2fr 1fr 2fr",
       }}
-      className={`px-4 py-2 border-b border-white/5 items-center text-sm min-h-[40px] ${
+      onClick={() => onSelect?.(entry.player.id)}
+      className={`px-4 py-2 border-b border-white/5 items-center text-sm min-h-[40px] cursor-pointer ${
         isDragging ? "opacity-50 bg-sky-500/10" : "hover:bg-white/[0.03]"
-      } ${entry.is_locked ? "bg-amber-500/5" : ""}`}
+      } ${entry.is_locked ? "bg-amber-500/5" : ""} ${
+        isSelected ? "!bg-sky-500/[0.08] border-l-2 border-l-sky-500" : ""
+      }`}
       {...attributes}
       {...listeners}
     >
       <div className="text-slate-500 font-mono text-xs">
         {displayRank}
       </div>
-      <div
-        className="font-medium text-slate-200 truncate min-w-0 cursor-pointer hover:text-sky-400 transition-colors"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => openPlayerCard(entry.player.id)}
-      >
-        {entry.player.full_name}
+      <div className="min-w-0 truncate">
+        <span
+          className="font-medium text-slate-200 cursor-pointer hover:text-sky-400 transition-colors"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            openPlayerCard(entry.player.id);
+          }}
+        >
+          {entry.player.full_name}
+        </span>
       </div>
       <div>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded ${posColor}`}>

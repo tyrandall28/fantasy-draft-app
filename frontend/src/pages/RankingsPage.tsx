@@ -4,6 +4,9 @@ import type { BaseRankingEntry, UserRanking, UserRankingDetail } from "../types"
 import RankingList from "../components/rankings/RankingList";
 import SourceSelector from "../components/rankings/SourceSelector";
 import SourceComparisonPanel from "../components/rankings/SourceComparisonPanel";
+import ContextualAnalyticsPanel from "../components/rankings/ContextualAnalyticsPanel";
+
+type RightPanelMode = "analytics" | "source";
 
 interface RankingSource {
   value: string;
@@ -18,9 +21,32 @@ export default function RankingsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [comparisonBaseEntries, setComparisonBaseEntries] = useState<BaseRankingEntry[]>([]);
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>("analytics");
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
 
   const handleComparisonLoaded = useCallback((entries: BaseRankingEntry[]) => {
     setComparisonBaseEntries(entries);
+  }, []);
+
+  const handlePlayerSelect = useCallback((playerId: number) => {
+    setSelectedPlayerIds((prev) => {
+      if (prev.includes(playerId)) {
+        return prev.filter((id) => id !== playerId);
+      }
+      if (prev.length >= 2) {
+        // Replace second selection with the new click
+        return [prev[0], playerId];
+      }
+      return [...prev, playerId];
+    });
+  }, []);
+
+  const handleDeselect = useCallback((playerId: number) => {
+    setSelectedPlayerIds((prev) => prev.filter((id) => id !== playerId));
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedPlayerIds([]);
   }, []);
 
   const fetchSources = async () => {
@@ -36,7 +62,10 @@ export default function RankingsPage() {
 
   const loadRanking = async (id: string) => {
     const data = await apiFetch<UserRankingDetail>(`/api/rankings/${id}`);
-    setActiveRanking(data);
+    setActiveRanking((prev) => {
+      if (prev?.id !== data.id) setSelectedPlayerIds([]);
+      return data;
+    });
   };
 
   const createRanking = async (source: string, name: string) => {
@@ -148,19 +177,55 @@ export default function RankingsPage() {
               onReorder={handleReorder}
               onToggleLock={handleToggleLock}
               comparisonBaseEntries={comparisonBaseEntries}
+              selectedPlayerIds={selectedPlayerIds}
+              onPlayerSelect={handlePlayerSelect}
             />
           </div>
 
-          {/* Right half: source comparison panel */}
+          {/* Right half: contextual analytics OR source comparison */}
           {sources.length > 0 && (
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#12141b]">
-              <SourceComparisonPanel
-                key={activeRanking.id}
-                sources={sources}
-                userEntries={activeRanking.entries}
-                initialSource={activeRanking.source}
-                onBaseEntriesLoaded={handleComparisonLoaded}
-              />
+            <div className="flex-1 flex flex-col overflow-hidden bg-[#12141b] relative">
+              {/* Mode toggle — floats at top-right of the panel header area */}
+              <div className="absolute top-3 right-4 z-10 flex bg-white/5 rounded-lg p-0.5">
+                <button
+                  onClick={() => setRightPanelMode("analytics")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    rightPanelMode === "analytics"
+                      ? "bg-sky-500 text-white"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Analytics
+                </button>
+                <button
+                  onClick={() => setRightPanelMode("source")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    rightPanelMode === "source"
+                      ? "bg-sky-500 text-white"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Source
+                </button>
+              </div>
+
+              {rightPanelMode === "analytics" ? (
+                <ContextualAnalyticsPanel
+                  entries={activeRanking.entries}
+                  comparisonBaseEntries={comparisonBaseEntries}
+                  selectedPlayerIds={selectedPlayerIds}
+                  onDeselect={handleDeselect}
+                  onClearSelection={handleClearSelection}
+                />
+              ) : (
+                <SourceComparisonPanel
+                  key={activeRanking.id}
+                  sources={sources}
+                  userEntries={activeRanking.entries}
+                  initialSource={activeRanking.source}
+                  onBaseEntriesLoaded={handleComparisonLoaded}
+                />
+              )}
             </div>
           )}
         </div>
