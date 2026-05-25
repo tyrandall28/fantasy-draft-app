@@ -244,6 +244,124 @@ dynamic → VOR(p) = p.ppg − replacement_ppg(all_players − drafted)
 
 Subscribe to the existing WebSocket `DraftRoomManager`, maintain a `draftedIds: Set<number>`, pass `pool.filter(p => !draftedIds.has(p.id))` into the same compute functions. Draft board auto-updates on every pick. Zero new math, one new data source. The replacement threshold naturally shifts as each position gets depleted — if 20 RBs are gone, the "last starter" is now a much worse player, the cliff gets steeper, the priority board re-ranks on its own.
 
+**Implementation note (2026-04-08):** Tier 1 shipped as `DraftValuePanel` inside the draft room's bottom `AnalysisTab`. The shared widgets (`DraftPriorityBoard`, `ValueCurvesChart`, `TierBreaksList`) were extracted from `PositionOverviewView` into `src/components/analytics/draftValueWidgets.tsx` and composed in a 3-column grid. The hook gained an optional `excludeIds: Set<number>` param that filters the pool before compute runs; the rankings page is the identity case with no filter.
+
+First-pass review revealed a design gap: **the three widgets answer a macro question ("which positions are scarce in general") but drafting is a player-level decision ("who do I click right now").** The priority board tells you *RBs are steep* but leaves you to translate that into an actual pick yourself. The VOR data already contains per-player values — we just never render them as a cross-position ranked list. Tier 1.5 below closes that gap.
+
+---
+
+##### Tier 1.5 — Actionable player-level view (the punchline layer)
+
+**Problem:** After Tier 1 shipped, the live panel technically works — priority board reorders on every pick, curves redraw, tiers collapse — but a user sitting at pick #24 still has to mentally translate *"RB priority is +9.8"* into *"OK so I should click Saquon Barkley."* The macro analysis is correct but abstract. The panel needs to deliver the punchline the VOR framework is already computing.
+
+**Insight:** Every `PositionCurve` returned by `computeVOR` already contains per-player VOR values in its `players: RankedPlayer[]` field. We've been aggregating that up to the position level for the priority board and throwing the player-level signal away. `curves.flatMap(c => c.players).sort((a, b) => b.vor - a.vor)` gives a direct cross-position "best available by VOR" list — **the actual answer to "who do I take right now."**
+
+---
+
+###### Widget 1.5a: Best Available by VOR (the new hero)
+
+A single ranked list of remaining players across *all* positions, sorted by VOR descending. Click a row to pick the player (or at least highlight it in the available-players list on the left).
+
+```
+1. Saquon Barkley     RB  +9.8 VOR
+2. CeeDee Lamb        WR  +8.2 VOR
+3. Justin Jefferson   WR  +7.6 VOR
+4. Bijan Robinson     RB  +7.2 VOR
+5. Tyreek Hill        WR  +6.9 VOR
+...
+```
+
+This is the single most direct answer the VOR framework can give. Everything the priority board is trying to say collapses into this one list once you rank players (not positions) by their value-over-replacement. If a user only glances at one thing in the panel, it should be this.
+
+---
+
+###### Widget 1.5b: Roster-need awareness — "VOR for YOU"
+
+`DraftContext` already exposes `myPicks: DraftPick[]`. Count those by position, compare against the league's `position_slots`, derive the user's open slots. Annotate the best-available list with a small badge indicating which open slot each player would fill:
+
+```
+1. Saquon Barkley     RB  +9.8 VOR   [FLEX]
+2. CeeDee Lamb        WR  +8.2 VOR   [WR2]
+3. Justin Jefferson   WR  +7.6 VOR   [WR2]
+4. Patrick Mahomes    QB  +5.1 VOR            ← no badge, QB1 filled
+```
+
+Above the list, a single **Suggestion card**:
+
+> ★ **Suggested: CeeDee Lamb (WR)** — highest-VOR player that fills an open starter slot (+8.2 VOR · fills WR2)
+
+**Algorithm:**
+1. Derive `openSlots: Partial<Record<Position, number>>` from `positionSlots − myPicksByPosition` (with FLEX counted against RB/WR/TE overflow)
+2. Filter the best-available list to players whose position still has an open slot
+3. The top of that filtered list is the suggestion
+4. If all starters are filled, fall back to the raw #1 (VOR across all positions, no filter)
+
+This is the first widget that actually *suggests* a pick. Importantly, it stays **soft** — it's a suggestion card with transparent reasoning, not a "DRAFT THIS" nag. The full best-available list sits right below for users who want to override the suggestion, and the reasoning text (`"highest-VOR player that fills an open starter slot"`) makes the logic legible so the user can disagree knowingly. This matches the earlier design principle: *let the user decide, give them the best possible information.*
+
+---
+
+###### Widget 1.5c: Position depletion strip (optional candy)
+
+A small horizontal row showing how fast each position's elite tier is emptying out. For each scoring position, count how many of the top N (where N = replacement rank) players are already drafted:
+
+```
+RB  ████████░░░  8/12 elite gone
+WR  ██████░░░░░  6/12 elite gone
+TE  ███░░░░░░░░  3/12 elite gone
+QB  ██░░░░░░░░░  2/12 elite gone
+```
+
+This is what the priority board is *trying* to communicate via shifting abstract numbers — but a progress bar makes *"RB is running out!"* visceral and immediate. Not strictly necessary; the suggestion card and best-available list already cover the decision. Include this if the panel feels information-sparse after the first two widgets ship, skip it otherwise.
+
+---
+
+###### Layout shift — actionable answer becomes the hero
+
+The existing Tier 1 layout puts the three original widgets (priority, curves, tiers) in a 3-column grid as the primary content. Tier 1.5 reshuffles this: the suggestion card + best-available list become the hero, and the original widgets get demoted to a supporting "context strip" below.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ ★ Suggested: CeeDee Lamb (WR) +8.2 VOR · fills WR2 need    │
+├────────────────────────────────────────────────────────────┤
+│ Best Available                                              │
+│ 1. Saquon Barkley    RB  +9.8  [FLEX]                      │
+│ 2. CeeDee Lamb       WR  +8.2  [WR2]  ★                    │
+│ 3. Justin Jefferson  WR  +7.6  [WR2]                       │
+│ 4. Bijan Robinson    RB  +7.2  [FLEX]                      │
+│ ... (click to pick)                                         │
+├────────────────────────────────────────────────────────────┤
+│ Priority │  Curves  │ Tiers    ← existing, smaller, collapsible │
+└────────────────────────────────────────────────────────────┘
+```
+
+Rationale: the user's attention should hit the actionable answer first; the macro analysis is there for users who want to understand *why* the suggestion is what it is.
+
+---
+
+###### Data requirement — league roster slots
+
+Roster-need awareness requires the league's `position_slots`. That field exists on the `League` type but is **not** in the current draft WS payload. Two approaches:
+
+1. **Quick (recommended for v1):** Hardcode a 12-team standard slot map as a default — `{QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, K: 1, DST: 1, BN: 6}`. Works for ~95% of leagues. Ship it, get the value, upgrade later.
+2. **Proper:** Fetch the league metadata once when `DraftProvider` mounts (`/api/leagues/{id}`), store `positionSlots` in `DraftContext`, pass it down. Small backend check to confirm the endpoint exposes `position_slots` (it should — it's already in the `League` schema). Maybe a half-hour of work.
+
+Start with #1 to validate the feature, then upgrade to #2 once it's clear the suggestion card is pulling its weight. No reason to couple the fetch to the compute.
+
+---
+
+###### Implementation order
+
+1. Create `selectBestAvailable(curves, limit)` pure function in `src/lib/draftValue.ts` — `curves.flatMap(c => c.players).sort(...).slice(0, limit)`. Returns `RankedPlayer[]`.
+2. Create `deriveOpenSlots(myPicks, positionSlots)` pure function in the same file — returns `{QB: 0, RB: 1, WR: 2, TE: 0, FLEX: 1, ...}`. Handles FLEX overflow math.
+3. Create `BestAvailableList` and `SuggestionCard` components in `draftValueWidgets.tsx`, alongside the existing three.
+4. Restructure `DraftValuePanel.tsx` with the new layout — suggestion + best-available up top, existing 3-col widgets demoted to the bottom (maybe inside a collapsible `<details>` for users who want them).
+5. (Optional) Add `DepletionStrip` widget if the panel still feels information-sparse.
+6. (Upgrade path) Fetch `positionSlots` from league metadata in `DraftProvider` and pass through context, replacing the hardcoded default.
+
+All of this remains pure compute + view — no new backend work, no schema changes, no math innovation. Just rendering data we were already computing and throwing away.
+
+---
+
 ##### Tier 2 — Hypothetical picks
 
 The user hovers or clicks a player and sees *"what happens if I take them?"* Clone the pool, remove the hypothetical pick, recompute, render a **delta view**:

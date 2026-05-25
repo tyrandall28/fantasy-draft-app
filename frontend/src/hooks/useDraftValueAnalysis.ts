@@ -21,6 +21,12 @@ interface UseDraftValueAnalysisOptions {
   topN?: number;
   /** Tier-break sensitivity — higher = fewer tiers. */
   sigmaK?: number;
+  /**
+   * Player IDs to remove from the pool before compute runs.
+   * Pass `draftedPlayerIds` from DraftContext for a live draft advisor,
+   * or leave undefined on the rankings page for the static pre-draft view.
+   */
+  excludeIds?: Set<number>;
 }
 
 interface UseDraftValueAnalysisResult {
@@ -51,6 +57,7 @@ export function useDraftValueAnalysis(
     minGames = DEFAULT_MIN_GAMES,
     topN = 5,
     sigmaK = 1.0,
+    excludeIds,
   } = options;
 
   // Fetch all scoring positions once the season is known
@@ -82,11 +89,16 @@ export function useDraftValueAnalysis(
         tierBreaks: [] as PositionTiers[],
       };
     }
-    const curves = computeVOR(pool, { thresholds, minGames });
+    // Filter out drafted players for live-draft mode; no-op on rankings page
+    const filteredPool =
+      excludeIds && excludeIds.size > 0
+        ? pool.filter((p) => !excludeIds.has(p.player_id))
+        : pool;
+    const curves = computeVOR(filteredPool, { thresholds, minGames });
     const priorityBoard = computePriorityBoard(curves, topN);
     const tierBreaks = computeAllTiers(curves, sigmaK);
     return { curves, priorityBoard, tierBreaks };
-  }, [pool, thresholds, minGames, topN, sigmaK]);
+  }, [pool, excludeIds, thresholds, minGames, topN, sigmaK]);
 
   return {
     season,

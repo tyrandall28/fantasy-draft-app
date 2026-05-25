@@ -15,6 +15,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { apiFetch } from "../../api/client";
 import type { DraftPick, UserRanking, UserRankingDetail, UserRankingEntry } from "../../types";
+import DraftValuePanel from "./DraftValuePanel";
 
 const POS_BADGE: Record<string, string> = {
   QB: "bg-red-500/20 text-red-400",
@@ -497,20 +498,8 @@ function RankingsTab() {
   );
 }
 
-/* ── Analysis Tab (Placeholder) ────────────────────────────────── */
+/* ── Analysis Tab ───────────────────────────────────────────────── */
 
 function AnalysisTab() {
-  return (
-    <div className="h-full flex items-center justify-center">
-      <div className="text-center">
-        <div className="text-3xl mb-3 text-slate-600">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-        </div>
-        <p className="text-sm font-medium text-slate-400">Player Analysis & AI Insights</p>
-        <p className="text-xs text-slate-600 mt-1">Coming soon — charts, stats, and AI-powered draft advice</p>
-      </div>
-    </div>
-  );
+  return <DraftValuePanel />;
 }
