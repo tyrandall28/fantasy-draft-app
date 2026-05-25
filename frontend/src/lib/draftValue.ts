@@ -11,11 +11,25 @@ import type { PlayerDerivedStats } from "../types";
 
 export const ALL_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"] as const;
 export const SCORING_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
+export const FLEX_POSITIONS: ReadonlySet<string> = new Set(["RB", "WR", "TE"]);
 
 export type Position = (typeof ALL_POSITIONS)[number];
 export type ScoringPosition = (typeof SCORING_POSITIONS)[number];
 
 export type ReplacementThresholds = Record<Position, number>;
+export type PositionSlots = Record<string, number>;
+
+/** Default 12-team standard starter/bench layout. */
+export const DEFAULT_POSITION_SLOTS: PositionSlots = {
+  QB: 1,
+  RB: 2,
+  WR: 2,
+  TE: 1,
+  FLEX: 1,
+  K: 1,
+  DST: 1,
+  BN: 6,
+};
 
 /** Default 12-team standard league replacement thresholds. */
 export const DEFAULT_12_TEAM_THRESHOLDS: ReplacementThresholds = {
@@ -233,4 +247,117 @@ export function computeAllTiers(
     const players = curve.players.slice(0, depth);
     return { position: curve.position, tiers: detectTiers(players, sigmaK) };
   });
+}
+
+/* ── Tier 1.5: actionable player-level view ─────────────────────── */
+
+export interface OpenSlots {
+  /** Open dedicated position slots (e.g. `{QB: 1, RB: 0, WR: 2, TE: 0}`). */
+  byPosition: Record<string, number>;
+  /** Open FLEX slots after picks have filled their dedicated positions. */
+  flex: number;
+}
+
+/**
+ * Flatten per-position VOR curves into a single cross-position ranking
+ * by VOR descending — the direct answer to "who should I take right now."
+ */
+export function selectBestAvailable(
+  curves: PositionCurve[],
+  limit?: number
+): RankedPlayer[] {
+  const all = curves.flatMap((c) => c.players);
+  all.sort((a, b) => b.vor - a.vor);
+  return limit != null ? all.slice(0, limit) : all;
+}
+
+/**
+ * Compute the user's remaining starter slots given their picks so far.
+ * RB/WR/TE picks that exceed their dedicated slots overflow into FLEX.
+ * Bench (BN) is ignored — only starter need matters for suggestion logic.
+ */
+export function deriveOpenSlots(
+  picks: { player: { position: string } }[],
+  positionSlots: PositionSlots = DEFAULT_POSITION_SLOTS
+): OpenSlots {
+  const byPosition: Record<string, number> = {};
+  for (const pos of ALL_POSITIONS) {
+    byPosition[pos] = positionSlots[pos] ?? 0;
+  }
+  let flex = positionSlots.FLEX ?? 0;
+
+  for (const pick of picks) {
+    const pos = pick.player.position;
+    if (byPosition[pos] != null && byPosition[pos] > 0) {
+      byPosition[pos]--;
+    } else if (FLEX_POSITIONS.has(pos) && flex > 0) {
+      flex--;
+    }
+    // else: would land on bench; no impact on starter slots
+  }
+
+  return { byPosition, flex };
+}
+
+/**
+ * Roster slot label this player would fill — "WR2", "FLEX", "QB", etc.
+ * Returns null if no starter slot is open (pick would land on the bench).
+ *
+ * Independent per-player snapshot — does NOT model sequential consumption.
+ * If two WRs both have an open WR2 slot, both show "WR2"; we don't try to
+ * predict that picking #1 would shove #2 into FLEX. That'd need a separate
+ * sequential view and isn't useful in a sortable list.
+ */
+export function rosterSlotForPlayer(
+  player: RankedPlayer,
+  open: OpenSlots,
+  positionSlots: PositionSlots = DEFAULT_POSITION_SLOTS
+): string | null {
+  const pos = player.player.position;
+  const dedicatedOpen = open.byPosition[pos] ?? 0;
+  const dedicatedTotal = positionSlots[pos] ?? 0;
+  if (dedicatedOpen > 0) {
+    const slotIndex = dedicatedTotal - dedicatedOpen + 1;
+    return dedicatedTotal > 1 ? `${pos}${slotIndex}` : pos;
+  }
+  if (FLEX_POSITIONS.has(pos) && open.flex > 0) {
+    return "FLEX";
+  }
+  return null;
+}
+
+export interface DraftSuggestion {
+  player: RankedPlayer;
+  /** Slot the player would fill, or null if no starter slot is open. */
+  slot: string | null;
+  /** Human-readable reasoning for the suggestion card. */
+  reason: string;
+}
+
+/**
+ * Pick the highest-VOR player whose position still has an open starter slot.
+ * Falls back to the raw #1 best-available if every starter slot is filled.
+ */
+export function selectSuggestion(
+  bestAvailable: RankedPlayer[],
+  open: OpenSlots,
+  positionSlots: PositionSlots = DEFAULT_POSITION_SLOTS
+): DraftSuggestion | null {
+  if (bestAvailable.length === 0) return null;
+  for (const player of bestAvailable) {
+    const slot = rosterSlotForPlayer(player, open, positionSlots);
+    if (slot != null) {
+      return {
+        player,
+        slot,
+        reason: `highest-VOR player that fills an open starter slot (+${player.vor.toFixed(1)} VOR · fills ${slot})`,
+      };
+    }
+  }
+  const fallback = bestAvailable[0];
+  return {
+    player: fallback,
+    slot: null,
+    reason: `all starter slots filled — highest VOR available overall (+${fallback.vor.toFixed(1)} VOR)`,
+  };
 }

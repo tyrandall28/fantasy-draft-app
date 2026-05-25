@@ -117,19 +117,20 @@ export default function BottomPanel({ picks }: Props) {
       className="bg-[#12141b] border-t border-white/5 flex flex-col flex-shrink-0 transition-[height] duration-200"
       style={{ height: `${resolvedHeight}px` }}
     >
-      {/* Top bar: resize handle + collapse/expand toggles + tabs */}
-      <div className="flex items-center flex-shrink-0 border-b border-white/5">
-        {/* Resize handle (hidden when collapsed or expanded) */}
-        {!collapsed && !expanded && (
-          <div
-            onMouseDown={handleMouseDown}
-            className="absolute left-0 right-0 top-0 h-1.5 cursor-row-resize group flex items-center justify-center hover:bg-sky-500/10 transition-colors z-10"
-            style={{ position: "relative" }}
-          >
-            <div className="w-10 h-0.5 rounded-full bg-slate-600 group-hover:bg-sky-500 transition-colors" />
-          </div>
-        )}
+      {/* Full-width drag handle pinned to the top edge of the panel.
+          Hidden when collapsed or fully expanded — nothing to resize. */}
+      {!collapsed && !expanded && (
+        <div
+          onMouseDown={handleMouseDown}
+          className="h-2 w-full cursor-row-resize group flex items-center justify-center hover:bg-sky-500/10 transition-colors flex-shrink-0 border-b border-white/5"
+          title="Drag up or down to resize"
+        >
+          <div className="w-12 h-1 rounded-full bg-slate-600 group-hover:bg-sky-500 transition-colors" />
+        </div>
+      )}
 
+      {/* Top bar: collapse/expand toggles + tabs */}
+      <div className="flex items-center flex-shrink-0 border-b border-white/5">
         {/* Collapse toggle */}
         <button
           onClick={toggleCollapse}

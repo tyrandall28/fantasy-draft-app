@@ -2,23 +2,57 @@ import { useMemo } from "react";
 import { useDraft } from "../../context/DraftContext";
 import { useDraftValueAnalysis } from "../../hooks/useDraftValueAnalysis";
 import {
+  DEFAULT_POSITION_SLOTS,
+  deriveOpenSlots,
+  selectBestAvailable,
+  selectSuggestion,
+} from "../../lib/draftValue";
+import {
+  BestAvailableList,
   DraftPriorityBoard,
+  SuggestionCard,
   TierBreaksList,
   ValueCurvesChart,
 } from "../analytics/draftValueWidgets";
 
 /**
- * Live draft-value advisor. Subscribes to DraftContext, filters the player
- * pool by the current draftedPlayerIds, and re-runs VOR / tier / priority
- * compute on every pick. Same compute pipeline as the static rankings view.
+ * Live draft-value advisor. Tier 1.5 layout: the actionable answer
+ * (suggestion card + best-available list) is the hero; the macro
+ * widgets (priority, curves, tiers) are demoted to a collapsible
+ * "why" strip below.
  */
 export default function DraftValuePanel() {
-  const { state, draftedPlayerIds } = useDraft();
+  const { state, draftedPlayerIds, myPicks, makePick } = useDraft();
 
   const { curves, priorityBoard, tierBreaks, loading, season } =
     useDraftValueAnalysis({ excludeIds: draftedPlayerIds });
 
-  // Count drafted players per skill position for the header context strip
+  // Open starter slots derived from the user's picks so far
+  const openSlots = useMemo(
+    () => deriveOpenSlots(myPicks, DEFAULT_POSITION_SLOTS),
+    [myPicks]
+  );
+
+  // Cross-position best-available ranking (Tier 1.5 hero data)
+  const bestAvailable = useMemo(
+    () => selectBestAvailable(curves, 25),
+    [curves]
+  );
+
+  const suggestion = useMemo(
+    () => selectSuggestion(bestAvailable, openSlots, DEFAULT_POSITION_SLOTS),
+    [bestAvailable, openSlots]
+  );
+
+  // Detect whether it's the current user's turn
+  const isMyTurn = useMemo(() => {
+    if (!state) return false;
+    if (state.status !== "drafting") return false;
+    const userId = localStorage.getItem("user_id");
+    return state.current_user_id === userId;
+  }, [state]);
+
+  // Drafted counts per skill position for the header strip
   const draftedByPos = useMemo(() => {
     const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     for (const pick of state?.picks ?? []) {
@@ -32,9 +66,9 @@ export default function DraftValuePanel() {
   const hasData = curves.length > 0;
 
   return (
-    <div className="h-full overflow-y-auto p-4">
+    <div className="h-full overflow-y-auto p-4 space-y-4">
       {/* Header strip: live indicator + drafted counts by position */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -74,22 +108,47 @@ export default function DraftValuePanel() {
         </div>
       )}
 
-      {/* Widget grid */}
+      {/* ── Hero: actionable answer ─────────────────────────────── */}
       {hasData && (
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 md:col-span-4">
-            <DraftPriorityBoard
-              priorityBoard={priorityBoard}
-              subtitle={totalDrafted === 0 ? "avg VOR of top 5" : "updated live"}
-            />
-          </div>
-          <div className="col-span-12 md:col-span-5">
-            <ValueCurvesChart curves={curves} height={180} />
-          </div>
-          <div className="col-span-12 md:col-span-3">
-            <TierBreaksList tierBreaks={tierBreaks} />
-          </div>
-        </div>
+        <>
+          <SuggestionCard
+            suggestion={suggestion}
+            isMyTurn={isMyTurn}
+            onPick={makePick}
+          />
+
+          <BestAvailableList
+            players={bestAvailable}
+            openSlots={openSlots}
+            positionSlots={DEFAULT_POSITION_SLOTS}
+            highlightId={suggestion?.player.player.player_id}
+            onPick={makePick}
+            isMyTurn={isMyTurn}
+          />
+
+          {/* ── Context strip: the "why" behind the suggestion ───── */}
+          <details className="group rounded-lg border border-white/5 bg-white/[0.02]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide hover:text-slate-200 transition-colors flex items-center justify-between">
+              <span>Why? · positional context</span>
+              <span className="text-[10px] text-slate-600 group-open:hidden">show</span>
+              <span className="text-[10px] text-slate-600 hidden group-open:inline">hide</span>
+            </summary>
+            <div className="grid grid-cols-12 gap-4 p-3 border-t border-white/5">
+              <div className="col-span-12 md:col-span-4">
+                <DraftPriorityBoard
+                  priorityBoard={priorityBoard}
+                  subtitle={totalDrafted === 0 ? "avg VOR of top 5" : "updated live"}
+                />
+              </div>
+              <div className="col-span-12 md:col-span-5">
+                <ValueCurvesChart curves={curves} height={180} />
+              </div>
+              <div className="col-span-12 md:col-span-3">
+                <TierBreaksList tierBreaks={tierBreaks} />
+              </div>
+            </div>
+          </details>
+        </>
       )}
     </div>
   );

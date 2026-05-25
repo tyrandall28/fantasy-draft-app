@@ -11,10 +11,15 @@ import {
   YAxis,
 } from "recharts";
 import type {
+  DraftSuggestion,
+  OpenSlots,
   PositionCurve,
   PositionPriority,
+  PositionSlots,
   PositionTiers,
+  RankedPlayer,
 } from "../../lib/draftValue";
+import { rosterSlotForPlayer } from "../../lib/draftValue";
 
 /**
  * Shared draft-value widgets. Layout-agnostic — consumers compose them
@@ -299,6 +304,200 @@ export function TierBreaksList({ tierBreaks, hideHeading = false }: TierBreaksLi
       </div>
       <p className="text-[10px] text-slate-600 mt-2 italic">
         Auto-detected from PPG gaps. A big gap after a tier = a cliff you don't want to fall off.
+      </p>
+    </div>
+  );
+}
+
+/* ── Suggestion Card (hero) ────────────────────────────────────── */
+
+interface SuggestionCardProps {
+  suggestion: DraftSuggestion | null;
+  isMyTurn?: boolean;
+  onPick?: (playerId: number) => void;
+}
+
+export function SuggestionCard({ suggestion, isMyTurn, onPick }: SuggestionCardProps) {
+  if (!suggestion) {
+    return (
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+        <p className="text-xs text-slate-500">No suggestion available yet.</p>
+      </div>
+    );
+  }
+
+  const { player, slot, reason } = suggestion;
+  const pos = player.player.position;
+  const accent = POS_HEX[pos] ?? "#94a3b8";
+  const canPick = isMyTurn && onPick != null;
+
+  return (
+    <div
+      className="rounded-lg border p-3 transition-colors"
+      style={{
+        borderColor: accent + "55",
+        background: `linear-gradient(135deg, ${accent}14, transparent 70%)`,
+      }}
+    >
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-amber-400 text-sm">★</span>
+            <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
+              Suggested pick
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_COLORS[pos] ?? ""}`}
+            >
+              {pos}
+            </span>
+            <span className="text-base font-semibold text-white truncate">
+              {player.player.full_name}
+            </span>
+            <span className="text-xs text-slate-500">{player.player.nfl_team}</span>
+            <span
+              className="text-sm font-mono font-bold"
+              style={{ color: accent }}
+            >
+              +{player.vor.toFixed(1)} VOR
+            </span>
+            {slot && (
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
+                style={{
+                  color: accent,
+                  borderColor: accent + "55",
+                  backgroundColor: accent + "0d",
+                }}
+              >
+                {slot}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1.5 italic">{reason}</p>
+        </div>
+        {canPick && (
+          <button
+            onClick={() => onPick!(player.player.player_id)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors flex-shrink-0"
+          >
+            Draft
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Best Available List ───────────────────────────────────────── */
+
+interface BestAvailableListProps {
+  players: RankedPlayer[];
+  openSlots?: OpenSlots;
+  positionSlots?: PositionSlots;
+  /** Highlight this player_id (e.g. the current suggestion). */
+  highlightId?: number;
+  /** When provided, rows become clickable and call this on click. */
+  onPick?: (playerId: number) => void;
+  isMyTurn?: boolean;
+  /** Max rows to render. Defaults to 15. */
+  limit?: number;
+  hideHeading?: boolean;
+}
+
+export function BestAvailableList({
+  players,
+  openSlots,
+  positionSlots,
+  highlightId,
+  onPick,
+  isMyTurn,
+  limit = 15,
+  hideHeading = false,
+}: BestAvailableListProps) {
+  const rows = useMemo(() => players.slice(0, limit), [players, limit]);
+
+  if (rows.length === 0) {
+    return (
+      <div className="text-center py-4">
+        <p className="text-xs text-slate-500">No players available.</p>
+      </div>
+    );
+  }
+
+  const interactive = isMyTurn && onPick != null;
+
+  return (
+    <div>
+      {!hideHeading && (
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+            Best Available
+          </h3>
+          <span className="text-[10px] text-slate-600">by VOR · across all positions</span>
+        </div>
+      )}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] overflow-hidden">
+        {rows.map((rp, i) => {
+          const pos = rp.player.position;
+          const accent = POS_HEX[pos] ?? "#94a3b8";
+          const slot = openSlots
+            ? rosterSlotForPlayer(rp, openSlots, positionSlots)
+            : null;
+          const isHighlight = highlightId === rp.player.player_id;
+          return (
+            <div
+              key={rp.player.player_id}
+              onClick={interactive ? () => onPick!(rp.player.player_id) : undefined}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm border-b border-white/5 last:border-b-0 transition-colors ${
+                interactive ? "cursor-pointer hover:bg-white/[0.04]" : ""
+              } ${isHighlight ? "bg-amber-500/5" : ""}`}
+            >
+              <span className="text-slate-600 font-mono text-[10px] w-5 text-right flex-shrink-0">
+                {i + 1}
+              </span>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0 ${POS_COLORS[pos] ?? ""}`}
+              >
+                {pos}
+              </span>
+              <span className="text-slate-200 font-medium truncate flex-1 min-w-0">
+                {rp.player.full_name}
+                {isHighlight && <span className="text-amber-400 ml-1">★</span>}
+              </span>
+              <span className="text-slate-600 text-[11px] w-9 text-right flex-shrink-0">
+                {rp.player.nfl_team}
+              </span>
+              <span
+                className="text-xs font-mono font-semibold w-12 text-right flex-shrink-0"
+                style={{ color: accent }}
+              >
+                +{rp.vor.toFixed(1)}
+              </span>
+              <span className="w-12 flex-shrink-0 text-right">
+                {slot ? (
+                  <span
+                    className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
+                    style={{
+                      color: accent,
+                      borderColor: accent + "44",
+                      backgroundColor: accent + "0d",
+                    }}
+                  >
+                    {slot}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-700">BN</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-slate-600 mt-1.5 italic">
+        Slot badges show where each pick would land on your roster. "BN" = bench filler.
       </p>
     </div>
   );
