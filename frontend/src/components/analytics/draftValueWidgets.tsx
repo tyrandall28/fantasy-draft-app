@@ -14,6 +14,7 @@ import type {
   DraftSuggestion,
   OpenSlots,
   PositionCurve,
+  PositionDepletion,
   PositionPriority,
   PositionSlots,
   PositionTiers,
@@ -305,6 +306,65 @@ export function TierBreaksList({ tierBreaks, hideHeading = false }: TierBreaksLi
       <p className="text-[10px] text-slate-600 mt-2 italic">
         Auto-detected from PPG gaps. A big gap after a tier = a cliff you don't want to fall off.
       </p>
+    </div>
+  );
+}
+
+/* ── Depletion Strip ───────────────────────────────────────────── */
+
+interface DepletionStripProps {
+  depletion: PositionDepletion[];
+  /** Render compactly inline (1 row) vs stacked rows. Default = stacked. */
+  inline?: boolean;
+}
+
+export function DepletionStrip({ depletion, inline = false }: DepletionStripProps) {
+  const rows = useMemo(
+    () => depletion.filter((d) => POS_HEX[d.position] != null && d.total > 0),
+    [depletion]
+  );
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div
+      className={
+        inline
+          ? "flex items-center gap-3 flex-wrap"
+          : "space-y-1"
+      }
+    >
+      {rows.map((d) => {
+        const pct = d.total > 0 ? (d.drafted / d.total) * 100 : 0;
+        const accent = POS_HEX[d.position] ?? "#94a3b8";
+        return (
+          <div
+            key={d.position}
+            className={inline ? "flex items-center gap-1.5 flex-1 min-w-[140px]" : "flex items-center gap-2"}
+          >
+            <span
+              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0 ${POS_COLORS[d.position] ?? ""}`}
+            >
+              {d.position}
+            </span>
+            <div className="flex-1 h-2 bg-white/[0.04] rounded-sm overflow-hidden min-w-0">
+              <div
+                className="h-full rounded-sm transition-all duration-500"
+                style={{
+                  width: `${pct}%`,
+                  backgroundColor: accent + "cc",
+                }}
+              />
+            </div>
+            <span
+              className="text-[10px] font-mono text-slate-500 w-12 text-right flex-shrink-0"
+              title={`${d.drafted} of top ${d.total} drafted`}
+            >
+              {d.drafted}/{d.total}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

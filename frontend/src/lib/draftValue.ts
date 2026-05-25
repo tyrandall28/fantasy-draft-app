@@ -326,6 +326,34 @@ export function rosterSlotForPlayer(
   return null;
 }
 
+export interface PositionDepletion {
+  position: Position;
+  /** How many of the original top N at this position have been drafted. */
+  drafted: number;
+  /** The N threshold (replacementRank) used as the denominator. */
+  total: number;
+}
+
+/**
+ * For each position in the baseline (unfiltered) curves, count how many
+ * of its top-N "elite" players have been drafted. Used by DepletionStrip
+ * to visualize how fast each tier is emptying out.
+ *
+ * Must be passed the BASELINE curves (computed before draftedIds filter),
+ * not the live filtered curves — otherwise drafted players are absent and
+ * the count is always zero.
+ */
+export function computeDepletion(
+  baselineCurves: PositionCurve[],
+  draftedIds: Set<number>
+): PositionDepletion[] {
+  return baselineCurves.map((curve) => {
+    const top = curve.players.slice(0, curve.replacementRank);
+    const drafted = top.filter((p) => draftedIds.has(p.player.player_id)).length;
+    return { position: curve.position, drafted, total: top.length };
+  });
+}
+
 export interface DraftSuggestion {
   player: RankedPlayer;
   /** Slot the player would fill, or null if no starter slot is open. */

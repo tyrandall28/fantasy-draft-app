@@ -3,12 +3,14 @@ import { useDraft } from "../../context/DraftContext";
 import { useDraftValueAnalysis } from "../../hooks/useDraftValueAnalysis";
 import {
   DEFAULT_POSITION_SLOTS,
+  computeDepletion,
   deriveOpenSlots,
   selectBestAvailable,
   selectSuggestion,
 } from "../../lib/draftValue";
 import {
   BestAvailableList,
+  DepletionStrip,
   DraftPriorityBoard,
   SuggestionCard,
   TierBreaksList,
@@ -24,7 +26,7 @@ import {
 export default function DraftValuePanel() {
   const { state, draftedPlayerIds, myPicks, makePick } = useDraft();
 
-  const { curves, priorityBoard, tierBreaks, loading, season } =
+  const { curves, baselineCurves, priorityBoard, tierBreaks, loading, season } =
     useDraftValueAnalysis({ excludeIds: draftedPlayerIds });
 
   // Open starter slots derived from the user's picks so far
@@ -42,6 +44,13 @@ export default function DraftValuePanel() {
   const suggestion = useMemo(
     () => selectSuggestion(bestAvailable, openSlots, DEFAULT_POSITION_SLOTS),
     [bestAvailable, openSlots]
+  );
+
+  // Elite depletion uses the baseline (pre-filter) curves so we can see which
+  // drafted players were originally in each position's top-N tier.
+  const depletion = useMemo(
+    () => computeDepletion(baselineCurves, draftedPlayerIds),
+    [baselineCurves, draftedPlayerIds]
   );
 
   // Detect whether it's the current user's turn
@@ -111,6 +120,19 @@ export default function DraftValuePanel() {
       {/* ── Hero: actionable answer ─────────────────────────────── */}
       {hasData && (
         <>
+          {/* Position depletion: how fast each tier is emptying */}
+          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                Elite Depletion
+              </span>
+              <span className="text-[10px] text-slate-600 italic">
+                top-N drafted by position
+              </span>
+            </div>
+            <DepletionStrip depletion={depletion} inline />
+          </div>
+
           <SuggestionCard
             suggestion={suggestion}
             isMyTurn={isMyTurn}

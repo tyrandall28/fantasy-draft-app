@@ -32,7 +32,14 @@ interface UseDraftValueAnalysisOptions {
 interface UseDraftValueAnalysisResult {
   season: number | null;
   loading: boolean;
+  /** Live curves — computed over the pool minus `excludeIds`. */
   curves: PositionCurve[];
+  /**
+   * Baseline curves over the full unfiltered pool. Use these (not `curves`)
+   * when you need to reason about which drafted players were "elite" — they
+   * are by definition missing from the filtered curves.
+   */
+  baselineCurves: PositionCurve[];
   priorityBoard: PositionPriority[];
   tierBreaks: PositionTiers[];
 }
@@ -81,29 +88,45 @@ export function useDraftValueAnalysis(
     };
   }, [season, fetchPositionData]);
 
+  // Baseline curves are draft-independent — recompute only when the pool
+  // or VOR config changes, not on every pick.
+  const baselineCurves = useMemo(() => {
+    if (pool.length === 0) return [] as PositionCurve[];
+    return computeVOR(pool, { thresholds, minGames });
+  }, [pool, thresholds, minGames]);
+
   const { curves, priorityBoard, tierBreaks } = useMemo(() => {
-    if (pool.length === 0) {
+    if (baselineCurves.length === 0) {
       return {
         curves: [] as PositionCurve[],
         priorityBoard: [] as PositionPriority[],
         tierBreaks: [] as PositionTiers[],
       };
     }
-    // Filter out drafted players for live-draft mode; no-op on rankings page
-    const filteredPool =
-      excludeIds && excludeIds.size > 0
-        ? pool.filter((p) => !excludeIds.has(p.player_id))
-        : pool;
+    // No filter → reuse baseline; rankings page hits this path.
+    if (!excludeIds || excludeIds.size === 0) {
+      return {
+        curves: baselineCurves,
+        priorityBoard: computePriorityBoard(baselineCurves, topN),
+        tierBreaks: computeAllTiers(baselineCurves, sigmaK),
+      };
+    }
+    // Live-draft mode: recompute VOR over the post-draft pool so the
+    // replacement threshold tracks scarcity as elites get picked.
+    const filteredPool = pool.filter((p) => !excludeIds.has(p.player_id));
     const curves = computeVOR(filteredPool, { thresholds, minGames });
-    const priorityBoard = computePriorityBoard(curves, topN);
-    const tierBreaks = computeAllTiers(curves, sigmaK);
-    return { curves, priorityBoard, tierBreaks };
-  }, [pool, excludeIds, thresholds, minGames, topN, sigmaK]);
+    return {
+      curves,
+      priorityBoard: computePriorityBoard(curves, topN),
+      tierBreaks: computeAllTiers(curves, sigmaK),
+    };
+  }, [pool, baselineCurves, excludeIds, thresholds, minGames, topN, sigmaK]);
 
   return {
     season,
     loading: fetching,
     curves,
+    baselineCurves,
     priorityBoard,
     tierBreaks,
   };
