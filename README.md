@@ -177,6 +177,18 @@ PYTHONPATH=. python -m rankings_ingester.main --source espn_ppr --year 2025
 
 **Adding new sources:** Register a new fetch function in `rankings_ingester/main.py`'s `SOURCES` dict and create a corresponding fetcher in `rankings_ingester/sources/`.
 
+**One-time dedup (run after first stats ingest):** Earlier versions of the rankings ingester matched players by name, creating duplicate Player rows when a ranking source spelled a name differently from nflverse (e.g. "James Cook" vs "James Cook III"). The dedup pass merges these orphan rows into the canonical nflverse-linked row.
+
+```bash
+# Dry-run (default) — see what would be merged
+PYTHONPATH=. python -m rankings_ingester.dedup
+
+# Apply the merges
+PYTHONPATH=. python -m rankings_ingester.dedup --apply
+```
+
+After this is run once, the loader's external-ID matching keeps things clean on every subsequent ingest — no recurring dedup needed.
+
 ### 5. Ingest player stats (bio, seasonal, weekly)
 
 The stats ingester pulls comprehensive player data from [nflverse](https://github.com/nflverse) via the `nflreadpy` package. This populates external IDs, bio/combine data, seasonal stats, weekly game logs, and snap counts.

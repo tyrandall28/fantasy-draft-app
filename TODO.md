@@ -177,7 +177,7 @@ When a user clicks any player name (in rankings, draft board, available players 
 - [ ] **Step 7:** Build player card modal component on frontend
 - [ ] **Step 8:** Wire player card into rankings page, draft board, and available players list
 - [ ] **Step 9:** Add charts/visualizations (sparklines, radar chart)
-- [ ] **Step 10:** Refactor rankings ingestion (ESPN, Sleeper) to match on external IDs instead of name
+- [x] **Step 10:** Refactor rankings ingestion (ESPN, Sleeper) to match on external IDs instead of name (+ one-time `rankings_ingester.dedup` cleanup for existing duplicate Player rows)
 
 ---
 

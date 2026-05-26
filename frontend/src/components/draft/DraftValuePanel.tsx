@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../../api/client";
 import { useDraft } from "../../context/DraftContext";
 import { useDraftValueAnalysis } from "../../hooks/useDraftValueAnalysis";
+import type { League } from "../../types";
 import {
   DEFAULT_POSITION_SLOTS,
   computeDepletion,
@@ -23,11 +25,34 @@ import {
  * widgets (priority, curves, tiers) are demoted to a collapsible
  * "why" strip below.
  */
+// Human-readable labels for the bot ranking source values stored on the
+// League. Used in the transparency strip so users see exactly which list
+// the CPUs are drafting from (vs the historical-PPG source powering VOR).
+const BOT_SOURCE_LABELS: Record<string, string> = {
+  espn_ppr: "ESPN PPR",
+  sleeper_ppr: "Sleeper PPR ADP",
+};
+
 export default function DraftValuePanel() {
-  const { state, draftedPlayerIds, myPicks, makePick } = useDraft();
+  const { leagueId, state, draftedPlayerIds, myPicks, makePick } = useDraft();
 
   const { curves, baselineCurves, priorityBoard, tierBreaks, loading, season } =
     useDraftValueAnalysis({ excludeIds: draftedPlayerIds });
+
+  // Pull the league once so the transparency strip can name the bot source.
+  // Don't gate the panel on this — it's purely a label.
+  const [botSource, setBotSource] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<League>(`/api/leagues/${leagueId}`)
+      .then((lg) => {
+        if (!cancelled) setBotSource(lg.bot_ranking_source);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId]);
 
   // Open starter slots derived from the user's picks so far
   const openSlots = useMemo(
@@ -84,9 +109,6 @@ export default function DraftValuePanel() {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
           <h3 className="text-sm font-semibold text-white">Draft Value — Live</h3>
-          <span className="text-xs text-slate-500">
-            {season ? `${season} data` : ""}
-          </span>
         </div>
         <div className="flex items-center gap-3 text-xs">
           <span className="text-slate-500">
@@ -101,6 +123,23 @@ export default function DraftValuePanel() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Source transparency: spell out which list each side is using so
+          users aren't confused when CPU picks differ from our suggestion. */}
+      <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 -mt-2">
+        <span>
+          <span className="text-slate-600">VOR &amp; suggestion:</span>{" "}
+          <span className="text-slate-300 font-medium">
+            {season ? `${season} season PPG (VOR)` : "historical PPG (VOR)"}
+          </span>
+        </span>
+        <span>
+          <span className="text-slate-600">CPUs draft from:</span>{" "}
+          <span className="text-slate-300 font-medium">
+            {botSource ? (BOT_SOURCE_LABELS[botSource] ?? botSource) : "—"}
+          </span>
+        </span>
       </div>
 
       {/* Loading state before pool arrives */}

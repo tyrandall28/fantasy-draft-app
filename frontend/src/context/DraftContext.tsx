@@ -11,6 +11,7 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import type { DraftPick, DraftState } from "../types";
 
 interface DraftContextType {
+  leagueId: string;
   state: DraftState | null;
   connected: boolean;
   makePick: (playerId: number) => void;
@@ -134,7 +135,7 @@ export function DraftProvider({ leagueId, children }: Props) {
 
   return (
     <DraftContext.Provider
-      value={{ state, connected, makePick, toggleTimer, undoPick, myPicks, draftedPlayerIds }}
+      value={{ leagueId, state, connected, makePick, toggleTimer, undoPick, myPicks, draftedPlayerIds }}
     >
       {children}
     </DraftContext.Provider>

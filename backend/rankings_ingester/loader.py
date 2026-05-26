@@ -9,40 +9,103 @@ from app.models.player import BaseRanking, Player
 logger = logging.getLogger(__name__)
 
 
-async def upsert_player(db: AsyncSession, entry: dict) -> Player:
-    """Find existing player by name+position or create a new one. Update team/bye if changed."""
+# External-ID fields a rankings entry may carry. Listed in priority order:
+# espn_id and sleeper_id are integer/string scalars sourced from the
+# respective fantasy APIs. Matching on these is the canonical link and
+# avoids the entire "James Cook vs James Cook III" name-mismatch class
+# of bug.
+_EXTERNAL_ID_FIELDS = ("espn_id", "sleeper_id", "yahoo_id", "gsis_id", "pfr_id")
+
+
+async def _find_by_external_id(db: AsyncSession, entry: dict) -> Player | None:
+    """Look up a Player by any external ID present on the entry."""
+    for field in _EXTERNAL_ID_FIELDS:
+        value = entry.get(field)
+        if value is None:
+            continue
+        stmt = select(Player).where(getattr(Player, field) == value)
+        existing = await db.execute(stmt)
+        player = existing.scalar_one_or_none()
+        if player:
+            return player
+    return None
+
+
+async def _find_by_name_position(db: AsyncSession, entry: dict) -> Player | None:
+    """Legacy fallback when no external ID matches. Position + exact name."""
     stmt = select(Player).where(
         Player.full_name == entry["full_name"],
         Player.position == entry["position"],
     )
-    result = await db.execute(stmt)
-    player = result.scalar_one_or_none()
+    existing = await db.execute(stmt)
+    return existing.scalar_one_or_none()
 
-    if player:
-        # Update team if player was traded
-        changed = False
-        if entry["nfl_team"] != "UNK" and player.nfl_team != entry["nfl_team"]:
-            logger.info(f"  Team change: {player.full_name} {player.nfl_team} -> {entry['nfl_team']}")
-            player.nfl_team = entry["nfl_team"]
+
+def _heal_external_ids(player: Player, entry: dict) -> bool:
+    """Backfill missing external IDs on an existing Player row from this
+    ingest. Returns True if anything changed."""
+    changed = False
+    for field in _EXTERNAL_ID_FIELDS:
+        value = entry.get(field)
+        if value is None:
+            continue
+        current = getattr(player, field, None)
+        if current is None:
+            setattr(player, field, value)
             changed = True
-        if entry["bye_week"] > 0 and player.bye_week != entry["bye_week"]:
-            player.bye_week = entry["bye_week"]
-            changed = True
-        if changed:
-            await db.flush()
-    else:
-        # New player — use bye_week from entry (may be 0 if not available)
+    return changed
+
+
+async def upsert_player(db: AsyncSession, entry: dict) -> tuple[Player, bool]:
+    """Find existing player (by external ID first, then name+position) or
+    create a new one. Updates team/bye/external-IDs if changed.
+
+    Returns (player, is_new).
+    """
+    player = await _find_by_external_id(db, entry)
+    matched_by = "external_id" if player else None
+    if player is None:
+        player = await _find_by_name_position(db, entry)
+        matched_by = "name+position" if player else None
+
+    is_new = player is None
+
+    if is_new:
         player = Player(
             full_name=entry["full_name"],
             position=entry["position"],
             nfl_team=entry["nfl_team"],
             bye_week=entry.get("bye_week", 0),
         )
+        # Populate any external IDs from this entry on the new row.
+        _heal_external_ids(player, entry)
         db.add(player)
         await db.flush()
         logger.info(f"  New player: {player.full_name} ({player.position}, {player.nfl_team})")
+        return player, True
 
-    return player
+    # Existing row — update what's changed.
+    changed = False
+    if entry["nfl_team"] != "UNK" and player.nfl_team != entry["nfl_team"]:
+        logger.info(f"  Team change: {player.full_name} {player.nfl_team} -> {entry['nfl_team']}")
+        player.nfl_team = entry["nfl_team"]
+        changed = True
+    if entry["bye_week"] > 0 and player.bye_week != entry["bye_week"]:
+        player.bye_week = entry["bye_week"]
+        changed = True
+
+    # Heal missing external IDs. If we matched by name+position and the
+    # entry carries an ID the row was missing, persist it so future ingests
+    # match by ID (no more drift).
+    if _heal_external_ids(player, entry):
+        if matched_by == "name+position":
+            logger.info(f"  Linked external ID on existing row: {player.full_name}")
+        changed = True
+
+    if changed:
+        await db.flush()
+
+    return player, False
 
 
 def assign_tiers(entries: list[dict]) -> list[dict]:
@@ -88,16 +151,7 @@ async def load_rankings(
         logger.info(f"Cleared old base rankings for source '{source}'")
 
     for entry in entries:
-        # Check if player exists before upsert to track new vs updated
-        existing = await db.execute(
-            select(Player).where(
-                Player.full_name == entry["full_name"],
-                Player.position == entry["position"],
-            )
-        )
-        is_new = existing.scalar_one_or_none() is None
-
-        player = await upsert_player(db, entry)
+        player, is_new = await upsert_player(db, entry)
 
         if is_new:
             stats["new_players"] += 1
