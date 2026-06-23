@@ -199,21 +199,45 @@ async def step1_external_ids(dry_run: bool = False):
     logger.info(f"  {len(ids_df)} fantasy-relevant players in nflverse")
 
     async with async_session() as db:
-        # Load all existing players
-        result = await db.execute(select(Player))
-        existing = {p.full_name.lower() + "|" + p.position: p for p in result.scalars()}
-        logger.info(f"  {len(existing)} existing players in DB")
+        # Load all existing players once.
+        all_players = (await db.execute(select(Player))).scalars().all()
+        logger.info(f"  {len(all_players)} existing players in DB")
+
+        # Primary index: gsis_id is nflverse's canonical unique key. Matching
+        # on it (rather than name+position) is what keeps same-named players
+        # distinct — e.g. the rookie Kyle Williams vs the retired one. Matching
+        # by name would try to assign one player's gsis to the other's row.
+        by_gsis: dict[str, Player] = {p.gsis_id: p for p in all_players if p.gsis_id}
+        # Fallback index: rows not yet linked to a gsis_id, grouped by
+        # name+position. Only consulted when a gsis has no row yet.
+        unlinked_by_name: dict[str, list[Player]] = {}
+        for p in all_players:
+            if not p.gsis_id:
+                unlinked_by_name.setdefault(p.full_name.lower() + "|" + p.position, []).append(p)
+
+        # DB-wide sets of external IDs already in use, so we never assign a
+        # value that already belongs to another row (the cause of the unique
+        # violation). They grow as we assign new values within this run.
+        used_espn = {p.espn_id for p in all_players if p.espn_id is not None}
+        used_sleeper = {p.sleeper_id for p in all_players if p.sleeper_id is not None}
+        used_yahoo = {p.yahoo_id for p in all_players if p.yahoo_id is not None}
+        used_pfr = {p.pfr_id for p in all_players if p.pfr_id is not None}
 
         matched = 0
+        linked = 0
         created = 0
         skipped = 0
+        processed_gsis: set[str] = set()
 
-        # Track IDs we've already assigned to avoid duplicates in nflverse data
-        seen_gsis: set[str] = set()
-        seen_espn: set[int] = set()
-        seen_sleeper: set[str] = set()
-        seen_yahoo: set[int] = set()
-        seen_pfr: set[str] = set()
+        def heal(player: Player, field: str, value, used: set) -> None:
+            """Fill a missing ID field, but only if the incoming value isn't
+            already taken by another row (prevents unique-constraint violations)."""
+            if value is None or value in used:
+                return
+            if getattr(player, field) is not None:
+                return
+            setattr(player, field, value)
+            used.add(value)
 
         for row in ids_df.iter_rows(named=True):
             name = safe_str(row.get("name"))
@@ -230,61 +254,69 @@ async def step1_external_ids(dry_run: bool = False):
             if not gsis_id:
                 skipped += 1
                 continue
-
-            # Deduplicate — only first occurrence of each external ID wins
-            if gsis_id in seen_gsis:
+            if gsis_id in processed_gsis:
                 skipped += 1
                 continue
-            seen_gsis.add(gsis_id)
-            if espn_id and espn_id in seen_espn:
-                espn_id = None
-            if espn_id:
-                seen_espn.add(espn_id)
-            if sleeper_id and sleeper_id in seen_sleeper:
-                sleeper_id = None
-            if sleeper_id:
-                seen_sleeper.add(sleeper_id)
-            if yahoo_id and yahoo_id in seen_yahoo:
-                yahoo_id = None
-            if yahoo_id:
-                seen_yahoo.add(yahoo_id)
-            if pfr_id and pfr_id in seen_pfr:
-                pfr_id = None
-            if pfr_id:
-                seen_pfr.add(pfr_id)
+            processed_gsis.add(gsis_id)
 
-            # Try matching to existing player
-            key = name.lower() + "|" + position
-            player = existing.get(key)
-
-            if player:
-                # Update external IDs
-                player.gsis_id = gsis_id
-                player.espn_id = espn_id
-                player.sleeper_id = sleeper_id
-                player.yahoo_id = yahoo_id
-                player.pfr_id = pfr_id
+            player = by_gsis.get(gsis_id)
+            if player is not None:
+                # Already correctly linked by gsis — only backfill missing IDs.
+                heal(player, "espn_id", espn_id, used_espn)
+                heal(player, "sleeper_id", sleeper_id, used_sleeper)
+                heal(player, "yahoo_id", yahoo_id, used_yahoo)
+                heal(player, "pfr_id", pfr_id, used_pfr)
                 matched += 1
-            else:
-                # Create new player from nflverse data
-                player = Player(
-                    full_name=name,
-                    position=position,
-                    nfl_team=team if len(team) <= 5 else "UNK",
-                    bye_week=None,
-                    gsis_id=gsis_id,
-                    espn_id=espn_id,
-                    sleeper_id=sleeper_id,
-                    yahoo_id=yahoo_id,
-                    pfr_id=pfr_id,
-                )
-                db.add(player)
-                created += 1
+                continue
+
+            # No row owns this gsis yet. Fall back to a single unlinked
+            # name+position row (e.g. a player just created by the rankings
+            # ingest with no gsis). Skip if ambiguous — creating is safer than
+            # guessing which same-named row to link.
+            candidates = unlinked_by_name.get(name.lower() + "|" + position, [])
+            if len(candidates) == 1:
+                player = candidates[0]
+                player.gsis_id = gsis_id
+                by_gsis[gsis_id] = player
+                candidates.clear()  # no longer unlinked
+                heal(player, "espn_id", espn_id, used_espn)
+                heal(player, "sleeper_id", sleeper_id, used_sleeper)
+                heal(player, "yahoo_id", yahoo_id, used_yahoo)
+                heal(player, "pfr_id", pfr_id, used_pfr)
+                linked += 1
+                continue
+
+            # Genuinely new player — create it, taking only IDs not already in use.
+            new_espn = espn_id if espn_id not in used_espn else None
+            new_sleeper = sleeper_id if sleeper_id not in used_sleeper else None
+            new_yahoo = yahoo_id if yahoo_id not in used_yahoo else None
+            new_pfr = pfr_id if pfr_id not in used_pfr else None
+            player = Player(
+                full_name=name,
+                position=position,
+                nfl_team=team if len(team) <= 5 else "UNK",
+                bye_week=None,
+                gsis_id=gsis_id,
+                espn_id=new_espn,
+                sleeper_id=new_sleeper,
+                yahoo_id=new_yahoo,
+                pfr_id=new_pfr,
+            )
+            db.add(player)
+            by_gsis[gsis_id] = player
+            for val, used in ((new_espn, used_espn), (new_sleeper, used_sleeper),
+                              (new_yahoo, used_yahoo), (new_pfr, used_pfr)):
+                if val is not None:
+                    used.add(val)
+            created += 1
 
         if not dry_run:
             await db.commit()
 
-        logger.info(f"  Matched {matched} existing, created {created} new, skipped {skipped} (no gsis_id or duplicate)")
+        logger.info(
+            f"  Matched {matched} by gsis, linked {linked} by name, "
+            f"created {created} new, skipped {skipped} (no gsis_id or duplicate)"
+        )
 
 
 async def step2_bio_and_combine(dry_run: bool = False):
@@ -610,7 +642,10 @@ async def step4_aggregate_seasons(seasons: list[int], dry_run: bool = False):
                     fantasy_points=sum_float("fantasy_points"),
                     fantasy_points_ppr=sum_float("fantasy_points_ppr"),
                 )
-                db.add(ps)
+                # In dry-run the DELETE above is skipped, so adding rows would
+                # let autoflush collide with existing ones on uq_player_season.
+                if not dry_run:
+                    db.add(ps)
                 count += 1
 
             logger.info(f"  {season}: {count} player seasons aggregated")
@@ -816,7 +851,10 @@ async def step6_compute_derived_stats(seasons: list[int], dry_run: bool = False)
                     total_yards=total_yards,
                     fantasy_points_ppr=ps.fantasy_points_ppr,
                 )
-                db.add(derived)
+                # In dry-run the DELETE above is skipped, so adding rows would
+                # let autoflush collide with existing ones on uq_player_derived_season.
+                if not dry_run:
+                    db.add(derived)
                 count += 1
 
             logger.info(f"  {season}: {count} derived stat records computed")
