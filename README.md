@@ -1,271 +1,210 @@
 # Fantasy Draft App
 
-A full-stack fantasy football draft application that lets users create custom player rankings via drag-and-drop, then use those rankings for auto-pick in a real-time shared draft lobby with friends.
+[![CI](https://github.com/tyrandall28/fantasy-draft-app/actions/workflows/ci.yml/badge.svg)](https://github.com/tyrandall28/fantasy-draft-app/actions/workflows/ci.yml)
+
+A full-stack fantasy football draft platform. Build your own player rankings by
+drag-and-drop, then draft against friends or CPU opponents in a real-time shared
+lobby — with five seasons of NFL stats, analytics, and a natural-language data
+assistant alongside the board.
+
+> **Running it?** See **[RUNBOOK.md](RUNBOOK.md)** — start-up, data refresh, and
+> troubleshooting, step by step. The short version is `python -m scripts.doctor`,
+> which reports the state of everything and prints the command to fix whatever
+> isn't right.
+
+## Screenshots
+
+<!-- Drop the files listed in docs/screenshots/README.md into that folder and these render. -->
+| Live draft room | Rankings editor |
+|---|---|
+| ![Live draft room](docs/screenshots/draft-room.png) | ![Rankings editor](docs/screenshots/rankings.png) |
+
+| Player analytics | AI assistant |
+|---|---|
+| ![Player analytics](docs/screenshots/analytics.png) | ![Ask AI](docs/screenshots/assistant.png) |
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React, TypeScript, Vite, Tailwind CSS |
-| Backend | Python, FastAPI (async) |
-| Database | PostgreSQL 15 |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Recharts |
+| Backend | Python 3.12, FastAPI (async), SQLAlchemy 2.0, Alembic |
+| Database | PostgreSQL 17 |
 | Real-time | WebSockets (native FastAPI) |
-| Auth | JWT (email/password) |
-| Drag & Drop | @dnd-kit |
-| Player Stats | nflreadpy (nflverse) |
+| Auth | JWT access + refresh tokens |
+| Drag & drop | @dnd-kit |
+| Player data | nflverse via `nflreadpy`; ESPN + Sleeper public APIs |
+| AI assistant | Anthropic API (Claude) with tool-calling over the stats DB |
 
 ## Features
 
-### Auth
-- Email/password registration and login
-- JWT access + refresh tokens with automatic refresh
-- Protected routes on the frontend
-
-### Player Rankings
-- Seeded with a top-300 player database (ESPN PPR format)
-- Create custom ranking lists from a base source
-- Drag-and-drop reordering with @dnd-kit
-- Lock individual players to prevent accidental movement
-- Filter/search by name, position, or team
+### Rankings
+- Seeded with ESPN PPR and Sleeper ADP top-300 lists
+- Build custom ranking lists from any base source
+- Drag-and-drop reordering, with per-player locks so a stray drag can't move a guy you've decided on
+- Side-by-side comparison against the source list, showing where you disagree
+- Search and filter by name, position, or team
 
 ### Leagues
-- Create a league with customizable settings (team count, roster size, position slots, pick timer, scoring type)
-- Share a 12-character invite code for friends to join
-- Lobby page shows all members, settings, and draft order
-- Commissioner can randomize draft order and start the draft
+- Configurable team count, roster size, position slots, pick timer, and CPU ranking source
+- 12-character invite codes
+- Lobby with draft-order randomization and position claiming
+- CPU opponents that respect roster needs instead of blindly taking the top name
 
-### Player Stats & Analytics
-- Comprehensive player database with 3,300+ players and cross-source identity resolution (gsis_id, espn_id, sleeper_id, yahoo_id, pfr_id)
-- Player bio data: height, weight, college, NFL Draft capital, NFL Combine measurables (40-yard dash, bench press, vertical jump, broad jump, 3-cone, shuttle)
-- 5 years of seasonal stats (2020-2024): passing, rushing, receiving, kicking, fantasy points, snap counts
-- 29,000+ weekly game logs with per-game breakdowns and opponent data
-- Data sourced from nflverse via `nflreadpy` — free, no API keys, regularly updated
-
-### Live Draft
-- Real-time WebSocket-powered draft room
-- Snake draft order (odd rounds ascending, even rounds descending)
-- Server-authoritative countdown timer per pick
-- Auto-pick on timer expiry using the user's custom ranking list (falls back to default order)
-- Draft board grid showing all picks color-coded by position
-- Available player list with position filters and search
-- Live roster panel showing your picks
+### Live draft
+- WebSocket draft room with server-authoritative pick timer
+- Snake order (odd rounds ascending, even descending)
+- Auto-pick from your custom list when the clock runs out
+- Draft board color-coded by position, live roster panel, undo
+- Resizable bottom panel with value-over-replacement widgets: best available, positional value curves, tier depletion
 - Automatic reconnection with exponential backoff
 
-## Project Structure
+### Stats & analytics
+- **3,573 players** with cross-source identity resolution — every row carries `gsis_id`, `espn_id`, `sleeper_id`, `yahoo_id`, and `pfr_id`, so sources join on IDs instead of trying to agree on how to spell "Ja'Marr Chase"
+- **24,193 weekly game logs** across the 2022–2026 seasons
+- **2,782 player-seasons** of totals, plus a derived-metrics table with per-game rates, efficiency, EPA/CPOE, target share, snap share, and boom/bust consistency
+- **3,352 player bios** including draft capital and combine measurables (1,807 with a recorded 40 time)
+- Charts for weekly trends, boom/bust distribution, target share vs. air yards, snap trends, and head-to-head comparison
+
+### AI assistant ("Ask AI")
+Ask questions in plain English — *"Who led WRs in touchdowns in 2024?"*,
+*"Compare Jacobs and Walker"* — and get answers computed from the database.
+
+The model never produces a statistic. It picks one of three typed tools
+(`get_stat_leaders`, `compare_players`, `get_player_profile`) and fills in
+structured arguments; the backend runs deterministic parameterized SQL and feeds
+the rows back. A metric enum means the model can't request a column that doesn't
+exist, and every response carries a debug trace of the model's reasoning, the
+tools it chose, the exact arguments, and token usage.
+
+Requires an Anthropic API key. Everything else in the app runs without one.
+
+## Architecture
+
+```
+                     ┌──────────────────────────────┐
+  ESPN API ─────────→│  rankings_ingester           │
+  Sleeper API ──────→│   • external-ID matching     │──→ base_rankings
+                     │   • validation + dedup       │
+                     └──────────────────────────────┘
+                     ┌──────────────────────────────┐
+  nflverse ─────────→│  ingest_stats (6 steps)      │──→ players, player_bio,
+  (nflreadpy)        │   weekly → seasons → derived │    player_weekly_stats,
+                     └──────────────────────────────┘    player_seasons,
+                                                          player_derived_stats
+                                    │
+                     ┌──────────────┴───────────────┐
+                     │  FastAPI                     │
+                     │   REST  /api/*               │←── React + Vite frontend
+                     │   WS    /ws/draft/{league}   │
+                     └──────────────────────────────┘
+```
+
+Two independent pipelines: draft rankings (fast, refreshed often) and NFL stats
+(slower, incremental). Both are described in
+[RUNBOOK.md § What data is in here](RUNBOOK.md#4-what-data-is-in-here).
+
+## Project structure
 
 ```
 fantasy-draft-app/
-├── docker-compose.yml          # PostgreSQL for local dev
+├── RUNBOOK.md                  # how to run and refresh everything
+├── TODO.md                     # known issues and roadmap
+├── .github/workflows/ci.yml    # tests, migration check, frontend build
 ├── backend/
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   ├── alembic.ini
-│   ├── alembic/                # Database migrations
-│   └── app/
-│       ├── main.py             # FastAPI app entry point
-│       ├── config.py           # Settings via environment variables
-│       ├── database.py         # Async SQLAlchemy engine + session
-│       ├── models/             # SQLAlchemy models (User, Player, PlayerBio, PlayerSeason, PlayerWeeklyStat, BaseRanking, UserRanking, League, LeagueMember, DraftPick)
-│       ├── schemas/            # Pydantic request/response models
-│       ├── api/                # REST endpoints (auth, players, rankings, leagues, drafts)
-│       ├── ws/                 # WebSocket draft room manager
-│       ├── services/           # Business logic (auth, rankings, draft)
-│       └── seeds/              # Seed script + player data JSON
-├── rankings_ingester/          # Data ingestion modules
-│   ├── main.py                 # Rankings CLI (python -m rankings_ingester.main)
-│   ├── ingest_stats.py         # Player stats CLI (python -m rankings_ingester.ingest_stats)
-│   ├── loader.py               # DB upsert logic (players + base_rankings)
-│   └── sources/
-│       ├── espn.py             # ESPN PPR top 300 fetcher
-│       └── sleeper.py          # Sleeper PPR ADP fetcher
+│   ├── app/
+│   │   ├── main.py             # FastAPI entry point
+│   │   ├── config.py           # settings from APP_* env vars
+│   │   ├── nfl_season.py       # derives the current season from the date
+│   │   ├── models/             # SQLAlchemy models
+│   │   ├── schemas/            # Pydantic request/response models
+│   │   ├── api/                # REST endpoints
+│   │   ├── ws/                 # WebSocket draft room
+│   │   └── services/           # auth, rankings, draft, AI assistant
+│   ├── rankings_ingester/      # data pipelines
+│   │   ├── main.py             # rankings CLI
+│   │   ├── ingest_stats.py     # stats CLI (6 steps)
+│   │   ├── loader.py           # player upsert + ranking load
+│   │   ├── dedup.py            # duplicate-identity merge
+│   │   └── sources/            # espn.py, sleeper.py
+│   ├── scripts/
+│   │   ├── doctor.py           # health + data consistency report
+│   │   ├── refresh_data.py     # one-command refresh, then verify
+│   │   └── reset_db.py         # wipe everything (dev only)
+│   ├── alembic/versions/       # migrations
+│   └── tests/                  # 127 tests, SQLite-backed
 └── frontend/
-    ├── package.json
-    ├── Dockerfile
-    ├── vite.config.ts
     └── src/
-        ├── main.tsx
-        ├── App.tsx             # Route definitions
-        ├── api/                # Fetch wrapper with JWT interceptor
-        ├── context/            # AuthContext, DraftContext
-        ├── hooks/              # useWebSocket
-        ├── pages/              # Login, Register, Dashboard, Rankings, Lobby, DraftRoom, DraftResults
-        ├── components/         # layout/, rankings/, draft/
-        └── types/              # TypeScript interfaces
+        ├── pages/              # Login, Dashboard, Rankings, Lobby, DraftRoom, Analytics, Assistant
+        ├── components/         # layout/, rankings/, draft/, analytics/
+        ├── context/            # Auth, Draft, PlayerCard
+        ├── hooks/              # useWebSocket, analytics, draft value
+        └── lib/draftValue.ts   # VOR / value-curve math
 ```
 
-## Getting Started
+## Quick start
 
-### Prerequisites
+Full instructions, including first-time database setup, are in
+**[RUNBOOK.md](RUNBOOK.md)**. If everything is already installed:
 
-- **Docker** (for PostgreSQL)
-- **Python 3.12+**
-- **Node.js 20+**
-
-### 1. Start the database
-
-```bash
-docker-compose up -d
-```
-
-This starts a PostgreSQL instance on port 5432 with:
-- User: `fantasy`
-- Password: `fantasy_dev`
-- Database: `fantasy_draft`
-
-### 2. Set up the backend
-
-```bash
+```powershell
+# Terminal 1 — backend
 cd backend
-
-# Create a virtual environment
-python -m venv venv
-source venv/bin/activate    # On Windows Git Bash: source venv/Scripts/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run database migrations (creates all tables)
-alembic upgrade head
-```
-
-**Note:** If Alembic migrations haven't been generated yet, you can create the initial migration:
-
-```bash
-PYTHONPATH=. alembic revision --autogenerate -m "initial"
-PYTHONPATH=. alembic upgrade head
-```
-
-### 3. Seed the player data
-
-```bash
-# From the backend/ directory with venv activated
-python -m app.seeds.seed_players
-```
-
-This loads 300 NFL players into the database with ESPN PPR rankings as initial seed data.
-
-### 4. Update player rankings from ESPN (Rankings Ingester)
-
-The rankings ingester is a standalone module that fetches fresh player rankings from ESPN's public fantasy API and updates the database. It should be run periodically (e.g. once daily) to keep rankings current.
-
-```bash
-# From the backend/ directory with venv activated
-
-# Preview what would change without writing to the DB
-PYTHONPATH=. python -m rankings_ingester.main --dry-run
-
-# Fetch fresh ESPN PPR top 300 and update the database
-PYTHONPATH=. python -m rankings_ingester.main
-
-# Target a specific source or season year
-PYTHONPATH=. python -m rankings_ingester.main --source espn_ppr --year 2025
-```
-
-**What it does:**
-- Fetches the current ESPN PPR top 300 rankings via their public JSON API (no API key needed, no cost)
-- Upserts players — adds new players, updates NFL team for traded players
-- Replaces `base_rankings` for the source with fresh data — existing user-created custom rankings are not affected
-- Validates data quality (checks for duplicates, missing fields, rank gaps)
-- Logs all changes (new players, team changes, totals)
-
-**Available flags:**
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Fetch and validate only — no database writes |
-| `--source espn_ppr` | Run a specific source only (default: all registered sources) |
-| `--year 2025` | NFL season year (default: 2025) |
-
-**Adding new sources:** Register a new fetch function in `rankings_ingester/main.py`'s `SOURCES` dict and create a corresponding fetcher in `rankings_ingester/sources/`.
-
-**One-time dedup (run after first stats ingest):** Earlier versions of the rankings ingester matched players by name, creating duplicate Player rows when a ranking source spelled a name differently from nflverse (e.g. "James Cook" vs "James Cook III"). The dedup pass merges these orphan rows into the canonical nflverse-linked row.
-
-```bash
-# Dry-run (default) — see what would be merged
-PYTHONPATH=. python -m rankings_ingester.dedup
-
-# Apply the merges
-PYTHONPATH=. python -m rankings_ingester.dedup --apply
-```
-
-After this is run once, the loader's external-ID matching keeps things clean on every subsequent ingest — no recurring dedup needed.
-
-### 5. Ingest player stats (bio, seasonal, weekly)
-
-The stats ingester pulls comprehensive player data from [nflverse](https://github.com/nflverse) via the `nflreadpy` package. This populates external IDs, bio/combine data, seasonal stats, weekly game logs, and snap counts.
-
-```bash
-# From the backend/ directory with venv activated
-
-# Run all 5 steps for the default seasons (2020-2024)
-PYTHONPATH=. python -m rankings_ingester.ingest_stats
-
-# Specify seasons
-PYTHONPATH=. python -m rankings_ingester.ingest_stats --seasons 2022 2023 2024
-
-# Run specific steps only
-PYTHONPATH=. python -m rankings_ingester.ingest_stats --steps 1 2
-
-# Preview without writing to DB
-PYTHONPATH=. python -m rankings_ingester.ingest_stats --dry-run
-```
-
-**Steps:**
-| Step | What it does |
-|------|-------------|
-| 1 | Loads nflverse player IDs → populates `gsis_id`, `espn_id`, `sleeper_id`, `yahoo_id`, `pfr_id` on Player rows, creates missing players |
-| 2 | Loads bio + combine data → populates `player_bio` table (height, weight, college, draft info, 40-yard dash, etc.) |
-| 3 | Loads weekly player stats → populates `player_weekly_stats` (passing, rushing, receiving, kicking, fantasy points per game) |
-| 4 | Aggregates weekly stats → populates `player_seasons` (season totals) |
-| 5 | Loads snap counts → merges into weekly stats and season aggregates |
-
-**Data volume:** ~3,200 players, ~3,000 season rows, ~29,000 weekly stat rows for 5 seasons. Takes ~2 minutes to run.
-
-### 6. Start the backend server
-
-```bash
+.\venv\Scripts\Activate.ps1
+python -m scripts.doctor            # verify data health
 uvicorn app.main:app --reload --port 8000
-```
 
-The API will be available at `http://localhost:8000`. You can view the auto-generated docs at `http://localhost:8000/docs`.
-
-### 7. Set up and start the frontend
-
-```bash
+# Terminal 2 — frontend
 cd frontend
-
-# Install dependencies
-npm install
-
-# Start the dev server
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`. The Vite dev server proxies `/api` and `/ws` requests to the backend on port 8000.
+Frontend at http://localhost:5173, API docs at http://localhost:8000/docs.
 
-## Usage Walkthrough
+> PostgreSQL runs natively here as the `postgresql-x64-17` service. The
+> `docker-compose.yml` in this repo is vestigial — using it starts a second,
+> empty database on the same port. See the RUNBOOK.
 
-1. **Register** an account at `/register`
-2. **Create a ranking list** — go to Rankings, pick "ESPN PPR" as the source, name your list, and drag players to reorder. Lock players you don't want to move.
-3. **Create a league** — from the Dashboard, click "Create League" and give it a name
-4. **Invite friends** — copy the invite code from the lobby and share it. Friends register and use "Join League" with the code.
-5. **Set draft order** — the commissioner clicks "Randomize Draft Order" in the lobby
-6. **Start the draft** — commissioner clicks "Start Draft" (requires 2+ members and a draft order)
-7. **Draft!** — pick players when it's your turn. If the timer runs out, auto-pick kicks in using your custom ranking list.
-8. **View results** — after all picks are made, the draft board shows the complete results
+## Refreshing data
 
-## Environment Variables
+```powershell
+cd backend
+python -m scripts.refresh_data      # incremental; safe to run any time
+python -m scripts.doctor            # what's loaded, how fresh, is it consistent
+```
 
-The backend reads settings from environment variables prefixed with `APP_`:
+`refresh_data` runs the pipelines in dependency order, recomputes only what
+changed, prints a before/after row count per table, and finishes by running the
+health check. Season defaults come from the calendar, so they never go stale.
+Details in [RUNBOOK.md § Refresh the data](RUNBOOK.md#3-refresh-the-data).
+
+## Testing
+
+```powershell
+cd backend
+python -m pytest -q                 # 127 tests, in-memory SQLite, no Postgres needed
+```
+
+CI additionally applies every migration to an empty PostgreSQL database and runs
+`alembic check` to prove the models and the migrations agree — the drift guard
+that catches a table which only ever existed on someone's laptop.
+
+## Environment variables
+
+Backend settings are read from `APP_`-prefixed environment variables, or from a
+gitignored `backend/.env`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_DATABASE_URL` | `postgresql+asyncpg://fantasy:fantasy_dev@localhost:5432/fantasy_draft` | Database connection string |
-| `APP_SECRET_KEY` | `dev-secret-change-in-production` | JWT signing key |
+| `APP_SECRET_KEY` | `dev-secret-change-in-production` | JWT signing key — **must be overridden in production** |
 | `APP_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `APP_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `APP_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
+| `APP_ANTHROPIC_API_KEY` | _(unset)_ | Enables the AI assistant; without it that page returns a clear 503 |
+| `APP_ASSISTANT_MODEL` | `claude-opus-5` | Model for the assistant |
 
-## API Endpoints
+## API
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -274,25 +213,33 @@ The backend reads settings from environment variables prefixed with `APP_`:
 | POST | `/api/auth/refresh` | Refresh JWT |
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/players` | List players (`?position=QB&search=mahomes`) |
-| GET | `/api/players/{id}/stats` | Player career stats (all seasons) |
-| GET | `/api/players/{id}/bio` | Player bio + combine data |
-| GET | `/api/players/{id}/weekly?season=2024` | Weekly game logs for a season |
-| GET | `/api/players/base-rankings?source=espn_ppr` | Base ranking list |
-| GET | `/api/rankings/sources` | Available base ranking sources |
-| GET | `/api/rankings` | User's custom ranking lists |
-| POST | `/api/rankings` | Create ranking from base source |
-| GET | `/api/rankings/{id}` | Ranking with entries |
-| PUT | `/api/rankings/{id}/reorder` | Bulk reorder entries |
-| PATCH | `/api/rankings/{id}/entries/{entry_id}` | Toggle lock / move entry |
-| DELETE | `/api/rankings/{id}` | Delete ranking |
-| POST | `/api/leagues` | Create league |
-| GET | `/api/leagues` | User's leagues |
-| GET | `/api/leagues/{id}` | League detail |
-| PATCH | `/api/leagues/{id}` | Update settings |
-| POST | `/api/leagues/join` | Join via invite code |
-| POST | `/api/leagues/{id}/set-draft-order` | Set/randomize draft order |
-| PATCH | `/api/leagues/{id}/members/me` | Update team name / ranking |
-| POST | `/api/leagues/{id}/draft/start` | Start draft |
+| GET | `/api/players/{id}/stats` | Career stats, all seasons |
+| GET | `/api/players/{id}/bio` | Bio + combine data |
+| GET | `/api/players/{id}/weekly?season=2025` | Weekly game logs |
+| GET | `/api/players/base-rankings?source=espn_ppr` | A base ranking list |
+| GET | `/api/rankings/sources` | Available base sources |
+| GET/POST | `/api/rankings` | List / create custom ranking lists |
+| GET/DELETE | `/api/rankings/{id}` | Ranking detail / delete |
+| PUT | `/api/rankings/{id}/reorder` | Bulk reorder |
+| PATCH | `/api/rankings/{id}/entries/{entry_id}` | Toggle lock, move entry |
+| GET/POST | `/api/leagues` | List / create leagues |
+| GET/PATCH | `/api/leagues/{id}` | League detail / update settings |
+| POST | `/api/leagues/join` | Join by invite code |
+| POST | `/api/leagues/{id}/set-draft-order` | Set or randomize draft order |
+| POST/DELETE | `/api/leagues/{id}/bots[/{user_id}]` | Add / remove a CPU team |
+| POST | `/api/leagues/{id}/claim-position` | Claim a draft slot |
+| POST | `/api/leagues/{id}/draft/start` | Start the draft |
 | GET | `/api/leagues/{id}/draft/state` | Full draft state |
 | GET | `/api/leagues/{id}/draft/results` | Post-draft rosters |
-| WS | `/ws/draft/{league_id}?token={jwt}` | Live draft WebSocket |
+| GET | `/api/analytics/*` | Aggregated stats for the analytics pages |
+| POST | `/api/assistant/query` | Natural-language stats question |
+| WS | `/ws/draft/{league_id}?token={jwt}` | Live draft socket |
+
+## Status
+
+Working: auth, rankings, leagues, live draft with CPU opponents, stats
+ingestion, analytics, and the AI assistant (phase 1).
+
+Known issues and next steps are tracked in **[TODO.md](TODO.md)** — the notable
+ones being draft turn enforcement (currently disabled), 31 outstanding ESLint
+errors, and deployment to GCP.

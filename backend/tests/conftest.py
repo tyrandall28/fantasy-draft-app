@@ -74,10 +74,26 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP test client with DB dependency overridden to use test session."""
+async def client(db_engine, db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP test client whose DB dependency mirrors production: one session per
+    request, not one per test.
+
+    Sharing a single `expire_on_commit=False` session across requests keeps the
+    identity map (and any already-loaded relationship collections) alive between
+    them, so a committed DELETE could still show up in a later GET. That made
+    at least one test pass or fail purely on suite ordering. A fresh session per
+    request is what the real app does, so assertions mean what they say.
+
+    `db_session` stays in the signature so fixtures that seed data still run
+    first and share the same in-memory engine.
+    """
+    request_session_factory = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
     async def override_get_db():
-        yield db_session
+        async with request_session_factory() as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)

@@ -1,10 +1,12 @@
 """Load normalized rankings into the database — upsert players, replace base rankings."""
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.player import BaseRanking, Player
+from app.nfl_season import current_nfl_season
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +136,21 @@ async def load_rankings(
     source: str,
     entries: list[dict],
     *,
+    season: int | None = None,
     dry_run: bool = False,
 ) -> dict:
     """
     Upsert players and replace base rankings for the given source.
 
+    `season` is stamped on every row alongside a `fetched_at` timestamp so
+    `scripts.doctor` can tell a fresh list from a stale one. Defaults to the
+    current NFL season.
+
     Returns stats: {new_players, updated_players, total_rankings}
     """
     entries = assign_tiers(entries)
+    season = season if season is not None else current_nfl_season()
+    fetched_at = datetime.now(timezone.utc)
 
     stats = {"new_players": 0, "updated_players": 0, "total_rankings": 0}
 
@@ -164,6 +173,8 @@ async def load_rankings(
                 player_id=player.id,
                 rank=entry["rank"],
                 tier=entry.get("tier", 1),
+                season=season,
+                fetched_at=fetched_at,
             ))
         stats["total_rankings"] += 1
 

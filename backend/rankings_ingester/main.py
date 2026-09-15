@@ -6,7 +6,7 @@ Usage:
     python -m rankings_ingester.main                  # fetch ESPN PPR + load
     python -m rankings_ingester.main --dry-run        # fetch + validate only, no DB writes
     python -m rankings_ingester.main --source espn    # specific source only
-    python -m rankings_ingester.main --year 2025      # specific season
+    python -m rankings_ingester.main --year 2026      # override the season (defaults to current)
 """
 import argparse
 import asyncio
@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timezone
 
 from app.database import async_session
+from app.nfl_season import current_nfl_season
 from rankings_ingester.sources.espn import fetch_espn_ppr
 from rankings_ingester.sources.sleeper import fetch_sleeper_ppr
 from rankings_ingester.loader import load_rankings
@@ -43,12 +44,14 @@ SOURCES = {
 
 async def run_ingestion(
     sources: list[str] | None = None,
-    year: int = 2025,
+    year: int | None = None,
     dry_run: bool = False,
 ):
     """Run the full ingestion pipeline for the specified sources."""
+    year = year if year is not None else current_nfl_season()
     start = datetime.now(timezone.utc)
     logger.info(f"=== Rankings Ingestion Started at {start.isoformat()} ===")
+    logger.info(f"Target season: {year}")
 
     if sources is None:
         sources = list(SOURCES.keys())
@@ -84,6 +87,7 @@ async def run_ingestion(
                     db,
                     source_config["db_source"],
                     entries,
+                    season=year,
                     dry_run=dry_run,
                 )
                 results[source_key] = {"status": "ok", **stats}
@@ -138,8 +142,8 @@ def main():
     parser.add_argument(
         "--year",
         type=int,
-        default=2025,
-        help="NFL season year (default: 2025)",
+        default=None,
+        help=f"NFL season year (default: current season, {current_nfl_season()})",
     )
     parser.add_argument(
         "--dry-run",

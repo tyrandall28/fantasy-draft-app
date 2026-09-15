@@ -1,9 +1,13 @@
 """Tests for the rankings loader's external-ID matching and player dedup."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
+from sqlalchemy import func, select
 
 from rankings_ingester.dedup import normalize_name
-from rankings_ingester.loader import upsert_player
-from app.models.player import Player
+from rankings_ingester.loader import load_rankings, upsert_player
+from app.models.player import BaseRanking, Player
+from app.nfl_season import current_nfl_season
 
 
 class TestNormalizeName:
@@ -103,3 +107,76 @@ class TestUpsertPlayerExternalIdMatching:
         assert player.full_name == "Brand New"
         assert player.espn_id == 12345
         assert player.bye_week == 9
+
+
+class TestRankingProvenance:
+    """`load_rankings` stamps season + fetched_at on every row.
+
+    Without these, `scripts.doctor` can't tell a list pulled this morning from
+    one pulled last August -- which was the whole reason they were added.
+    """
+
+    @staticmethod
+    def _entries(n: int = 3) -> list[dict]:
+        return [
+            {
+                "full_name": f"Player {i}",
+                "position": "WR",
+                "nfl_team": "DAL",
+                "bye_week": 7,
+                "rank": i,
+                "espn_id": 1000 + i,
+            }
+            for i in range(1, n + 1)
+        ]
+
+    async def test_stamps_explicit_season_and_timestamp(self, db_session):
+        before = datetime.now(timezone.utc)
+        await load_rankings(db_session, "espn_ppr", self._entries(), season=2026)
+
+        rows = (
+            await db_session.execute(select(BaseRanking).where(BaseRanking.source == "espn_ppr"))
+        ).scalars().all()
+        assert len(rows) == 3
+        assert {r.season for r in rows} == {2026}
+        for r in rows:
+            stamped = r.fetched_at
+            if stamped.tzinfo is None:  # SQLite round-trips naive datetimes
+                stamped = stamped.replace(tzinfo=timezone.utc)
+            assert stamped >= before - timedelta(seconds=5)
+
+    async def test_defaults_to_current_season(self, db_session):
+        await load_rankings(db_session, "sleeper_ppr", self._entries(1))
+
+        row = (
+            await db_session.execute(select(BaseRanking).where(BaseRanking.source == "sleeper_ppr"))
+        ).scalars().one()
+        assert row.season == current_nfl_season()
+
+    async def test_all_rows_in_one_load_share_a_timestamp(self, db_session):
+        """One fetch is one point in time, so the whole list gets one stamp."""
+        await load_rankings(db_session, "espn_ppr", self._entries(5), season=2026)
+
+        rows = (
+            await db_session.execute(select(BaseRanking).where(BaseRanking.source == "espn_ppr"))
+        ).scalars().all()
+        assert len({r.fetched_at for r in rows}) == 1
+
+    async def test_replacing_a_source_refreshes_its_provenance(self, db_session):
+        """A re-ingest replaces the source's rows, so the old stamp is gone."""
+        await load_rankings(db_session, "espn_ppr", self._entries(3), season=2025)
+        await load_rankings(db_session, "espn_ppr", self._entries(3), season=2026)
+
+        rows = (
+            await db_session.execute(select(BaseRanking).where(BaseRanking.source == "espn_ppr"))
+        ).scalars().all()
+        assert len(rows) == 3
+        assert {r.season for r in rows} == {2026}
+
+    async def test_dry_run_writes_no_rankings(self, db_session):
+        await load_rankings(db_session, "espn_ppr", self._entries(3), season=2026, dry_run=True)
+
+        count = (
+            await db_session.execute(select(func.count()).select_from(BaseRanking))
+        ).scalar()
+        assert count == 0

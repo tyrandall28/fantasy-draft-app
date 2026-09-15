@@ -1,4 +1,6 @@
-from sqlalchemy import Date, Float, ForeignKey, Integer, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -35,6 +37,13 @@ class BaseRanking(Base):
     player_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False, index=True)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     tier: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    # Provenance — which season this list is for and when we fetched it. Without
+    # these there's no way to tell a fresh list from a year-old one. Nullable
+    # because rows loaded before provenance tracking existed have neither;
+    # `scripts.doctor` reports those as "unknown" until the next refresh.
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     player: Mapped["Player"] = relationship(lazy="joined")
 

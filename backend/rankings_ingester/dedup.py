@@ -18,8 +18,8 @@ This script:
   4. Skips ambiguous or low-confidence matches and logs them for review.
 
 Usage:
-    PYTHONPATH=. python -m rankings_ingester.dedup            # dry-run summary
-    PYTHONPATH=. python -m rankings_ingester.dedup --apply    # actually merge
+    python -m rankings_ingester.dedup            # dry-run summary
+    python -m rankings_ingester.dedup --apply    # actually merge
 """
 from __future__ import annotations
 

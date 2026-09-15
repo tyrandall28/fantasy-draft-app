@@ -3,8 +3,8 @@
 Use this for a clean slate during development. NEVER run against a real DB.
 
 Usage:
-    PYTHONPATH=. python -m scripts.reset_db            # confirmation prompt
-    PYTHONPATH=. python -m scripts.reset_db --yes      # skip prompt
+    python -m scripts.reset_db            # confirmation prompt
+    python -m scripts.reset_db --yes      # skip prompt
 """
 import argparse
 import asyncio
