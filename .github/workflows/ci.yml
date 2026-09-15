@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        # The suite runs on in-memory SQLite, so no database service is needed here.
+        run: python -m pytest -q
+
+  migrations:
+    name: Migrations build a correct schema
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fantasy
+          POSTGRES_PASSWORD: fantasy_dev
+          POSTGRES_DB: fantasy_draft
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_DATABASE_URL: postgresql+asyncpg://fantasy:fantasy_dev@localhost:5432/fantasy_draft
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply every migration to an empty database
+        # Catches a table that only ever existed in someone's local database --
+        # which is exactly how player_derived_stats went missing.
+        run: python -m alembic upgrade head
+
+      - name: Assert the schema matches the models
+        # `alembic check` fails if autogenerate would produce any operation, i.e.
+        # if a model changed without a migration. This is the drift guard.
+        run: python -m alembic check
+
+      - name: Assert every migration can be rolled back
+        run: python -m alembic downgrade base
+
+  frontend-build:
+    name: Frontend typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and build
+        # `npm run build` is `tsc -b && vite build`, so this covers both.
+        run: npm run build
