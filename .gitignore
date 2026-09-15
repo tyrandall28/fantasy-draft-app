@@ -30,5 +30,5 @@ error_output.txt
 backend/rankings_ingester/backups/
 
 # Misc
+# Local notes / prompt scratch - not useful to a reader of the repo.
 claude.md
-DATABASE_SCHEMA.md

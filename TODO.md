@@ -3,9 +3,13 @@
 ## Auth & Security (Pre-Launch)
 
 ### Critical
-- [ ] **Secret key via env var only** — remove default `"dev-secret-change-in-production"` from `config.py`, require `APP_SECRET_KEY` env var
+- [x] **Secret key / DB credentials enforced in production** — the dev defaults are
+  published in a public repo, so a deploy that forgot `APP_SECRET_KEY` would have
+  signed JWTs with a value anyone could read off GitHub and forge tokens with.
+  Rather than removing the defaults (which would break clone-and-run), setting
+  `APP_ENVIRONMENT=production` now makes startup *fail* while `APP_SECRET_KEY` or
+  `APP_DATABASE_URL` are still at their defaults. A crash, not a log warning.
 - [ ] **Migrate tokens to HttpOnly cookies** — localStorage is vulnerable to XSS; requires backend + frontend refactor
-- [ ] **DB credentials via env var only** — remove default connection string from `config.py`
 - [ ] **Password validation** — enforce minimum length (8+), complexity rules on register
 
 ### Critical (draft integrity)

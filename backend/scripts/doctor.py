@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import func, select, text
 
-from app.config import settings
+from app.config import DEV_SECRET_KEY, settings
 from app.database import async_session
 from app.models.player import (
     BaseRanking,
@@ -134,7 +134,7 @@ async def check_environment(db, rep: Report) -> None:
             fix="python -m alembic upgrade head",
         )
 
-    if settings.secret_key == "dev-secret-change-in-production":
+    if settings.secret_key == DEV_SECRET_KEY:
         rep.add(
             WARN,
             "APP_SECRET_KEY is the built-in default",

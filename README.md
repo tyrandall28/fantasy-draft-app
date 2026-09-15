@@ -132,7 +132,7 @@ fantasy-draft-app/
 │   │   ├── refresh_data.py     # one-command refresh, then verify
 │   │   └── reset_db.py         # wipe everything (dev only)
 │   ├── alembic/versions/       # migrations
-│   └── tests/                  # 127 tests, SQLite-backed
+│   └── tests/                  # 168 tests, SQLite-backed
 └── frontend/
     └── src/
         ├── pages/              # Login, Dashboard, Rankings, Lobby, DraftRoom, Analytics, Assistant
@@ -182,7 +182,7 @@ Details in [RUNBOOK.md § Refresh the data](RUNBOOK.md#3-refresh-the-data).
 
 ```powershell
 cd backend
-python -m pytest -q                 # 127 tests, in-memory SQLite, no Postgres needed
+python -m pytest -q                 # 168 tests, in-memory SQLite, no Postgres needed
 ```
 
 CI additionally applies every migration to an empty PostgreSQL database and runs
@@ -196,8 +196,9 @@ gitignored `backend/.env`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `APP_DATABASE_URL` | `postgresql+asyncpg://fantasy:fantasy_dev@localhost:5432/fantasy_draft` | Database connection string |
-| `APP_SECRET_KEY` | `dev-secret-change-in-production` | JWT signing key — **must be overridden in production** |
+| `APP_ENVIRONMENT` | `development` | Set to `production` on a deployed instance. The app then refuses to start while the two settings below are at their defaults. |
+| `APP_DATABASE_URL` | `postgresql+asyncpg://fantasy:fantasy_dev@localhost:5432/fantasy_draft` | Database connection string. Localhost dev credentials; also rejected in production |
+| `APP_SECRET_KEY` | `dev-secret-change-in-production` | JWT signing key. The default is published in this repo, so it is rejected when `APP_ENVIRONMENT=production` |
 | `APP_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `APP_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `APP_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
