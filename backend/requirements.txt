@@ -9,6 +9,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
 httpx==0.28.1
 nflreadpy==0.1.5
+anthropic>=0.49.0
 
 # Testing
 pytest==8.3.4

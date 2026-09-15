@@ -1,7 +1,27 @@
 # AI Natural-Language Query Feature — Design & Plan
 
-> Status: **Planning / not yet started.** This is a design doc capturing a brainstorm so we can pick it back up later. No code has been written for this feature yet.
+> Status: **Phase 1 implemented** (2026-06-22). Plain NL queries over the stats DB via
+> tool-calling, with a dedicated chat page and conversational follow-ups. Requires
+> `APP_ANTHROPIC_API_KEY` set on the backend. Phases 1B/2/3 not started.
 > Last updated: 2026-06-22.
+
+## Implementation status
+
+**Phase 1 (done):** dedicated `/assistant` chat page; conversational follow-ups; 3 tools
+(`get_stat_leaders`, `compare_players`, `get_player_profile`); manual tool-calling loop on
+`claude-opus-5` with prompt caching. Files:
+- Backend: `app/services/assistant_tools.py` (tools + entity resolution), `app/services/assistant_service.py`
+  (agentic loop), `app/api/assistant.py` + `app/schemas/assistant.py` (endpoint `POST /api/assistant/query`),
+  config keys `anthropic_api_key` / `assistant_model`.
+- Frontend: `src/pages/AssistantPage.tsx`, `src/api/assistant.ts`, route + "Ask AI" nav link.
+- Run: set `APP_ANTHROPIC_API_KEY`, then start backend + frontend; visit `/assistant`.
+- Debug/observability: each `/query` response returns a per-iteration `trace` (model, thinking,
+  tool calls + args, result summary, token usage), shown in a collapsible panel under each answer
+  and logged to the backend console. Model is set via `APP_ASSISTANT_MODEL`.
+- Conversation currently persists in browser `localStorage` only — see the per-user persistence
+  TODO under Phase 2.
+
+**Not yet done:** 1B (draft-aware), 2 (streaming + widget rendering), 3 (text-to-SQL).
 
 ## 1. The Goal
 
@@ -119,6 +139,13 @@ roadmap (stats chatbot was "future item #1"); accuracy stays deterministic with 
   draft into the prompt/tools. Deferred slightly so Phase 1 can ship and be evaluated first.
 - **Phase 2 — Richer UX.** Streaming responses; render structured widgets (reuse Recharts)
   instead of plain text; more tools (weekly trends, boom/bust, etc.).
+  - **Per-user conversation persistence (TODO).** The chat currently persists to the
+    browser's `localStorage` (`assistant.conversation.v1`), so it survives navigation and
+    reloads but is **browser-scoped, not user-scoped** — a different account on the same
+    browser sees the same chat, and the same account on another device sees nothing. We need
+    to move conversation history server-side (e.g. a `conversations`/`messages` table keyed by
+    `user_id`, loaded via a `GET /api/assistant/conversations` endpoint) so a user's chat
+    follows their account across devices. Until then, treat the saved chat as device-local.
 - **Phase 3 — The "ultimate" feature.** Guarded read-only **text-to-SQL** so users can ask
   about *anything* and the AI gives it a strong go at custom insights. This is the paid /
   power-user "custom query builder" tier. Requires: read-only DB role, statement timeout,
@@ -129,10 +156,11 @@ roadmap (stats chatbot was "future item #1"); accuracy stays deterministic with 
 - **SDK:** `anthropic` Python SDK. Use the beta tool runner (`@beta_tool`,
   `client.beta.messages.tool_runner`).
 - **Models (default + cost levers):**
-  - `claude-opus-4-8` — most capable; the recommended default to prototype on for quality.
-  - `claude-sonnet-4-6` — strong, cheaper.
-  - `claude-haiku-4-5` — fastest/cheapest; often plenty for structured tool-routing.
-  - Decision: prototype on Opus 4.8 for quality, then **benchmark Haiku/Sonnet** to see if
+  - `claude-opus-5` — most capable; the recommended default ($5/$25 per MTok).
+  - `claude-sonnet-5` — strong, cheaper ($2/$10 per MTok).
+  - `claude-haiku-4-5` — fastest/cheapest ($1/$5 per MTok); often plenty for
+    structured tool-routing, since our code does the actual computation.
+  - Decision: default to Opus 5 for quality, then **benchmark Haiku/Sonnet** to see if
     they hold up for routing. Downgrading for cost is a deliberate product decision.
 - **Hosting:** We have GCP credits. Claude is available on **Vertex AI**, which supports
   **Claude API + tool use** (what we need). Note: Vertex AI does *not* support Managed Agents
@@ -156,3 +184,45 @@ roadmap (stats chatbot was "future item #1"); accuracy stays deterministic with 
 - `app/models/player.py` — `PlayerDerivedStats`, `PlayerSeason`, `PlayerWeeklyStat`, `Player`.
 - `rankings_ingester/dedup.py` — `normalize_name()` for entity resolution.
 - `frontend/src/components/analytics/*` — existing Recharts widgets to render structured results.
+
+
+
+*****************************************************************************************************************
+Latest Update: 06/22/2026
+Phase 1 is built and verified up to the LLM call. Here's the summary.
+
+  What's built
+
+  Backend (tool-calling — the LLM routes, your DB computes, so stat values are always real):
+  - app/services/assistant_tools.py — 3 tools (get_stat_leaders, compare_players, get_player_profile), entity resolution that reuses the normalize_name logic and handles same-name players (verified: "kyle williams" → the NE rookie, not the     
+  retired one), and a metric enum so the model can't request a nonexistent column.
+  - app/services/assistant_service.py — manual agentic loop on claude-opus-5, adaptive thinking, prompt caching on the system prompt + tools, conversation history for follow-ups, a strict "only state tool data, never estimate" system prompt
+  with the 2022–2025 data-coverage facts baked in.
+  - app/api/assistant.py + schemas/assistant.py — POST /api/assistant/query (auth-required; returns a clean 503 if no API key is set).
+
+  Frontend:
+  - pages/AssistantPage.tsx — dedicated chat page with suggestion chips, follow-up support, and a "Thinking…" state.
+  - api/assistant.ts, /assistant route, and an "Ask AI" nav link.
+
+  Verification
+
+  - ✅ Backend imports clean (anthropic 0.111.0 installed in the venv)
+  - ✅ All 110 backend tests pass (no regressions)
+  - ✅ Tool queries verified against the real DB — e.g. "WR TDs 2024" → Ja'Marr Chase (17), McLaurin (13), St. Brown (13); Jacobs vs. Walker comparison populated correctly
+  - ✅ My new frontend files type-clean (the tsc errors that showed up are all pre-existing, in other files)
+  - ⏳ The full LLM round-trip is untested — it needs your Anthropic API key, and I didn't want to spend on it without asking.
+
+  To run it
+
+  The only missing piece is the API key. Set it on the backend, then start as usual:
+
+  $env:APP_ANTHROPIC_API_KEY = "sk-ant-..."
+  # from backend/, venv active:
+  uvicorn app.main:app --reload --port 8000
+  # separate terminal, from frontend/:
+  npm run dev
+  Then visit /assistant and try "Who led WRs in touchdowns in 2024?"
+
+  A couple of notes:
+  - Model defaults to claude-opus-5; override with APP_ASSISTANT_MODEL (e.g. claude-haiku-4-5) when you want to benchmark cost, per the plan.
+  - One nuance I noticed: the comparison shows a player's current team (e.g. "Kenneth Walker III, KC") next to 2024 stats, since nfl_team reflects the 2026 roster. Fine for now; worth revisiting if it reads oddly.

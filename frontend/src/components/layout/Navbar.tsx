@@ -20,6 +20,9 @@ export default function Navbar() {
           <Link to="/analytics" className="text-sm text-slate-300 hover:text-white transition-colors">
             Analytics
           </Link>
+          <Link to="/assistant" className="text-sm text-slate-300 hover:text-white transition-colors">
+            Ask AI
+          </Link>
           <span className="text-slate-500 text-sm">{user.username}</span>
           <button
             onClick={logout}
