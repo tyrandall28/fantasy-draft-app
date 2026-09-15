@@ -8,6 +8,17 @@
 - [ ] **DB credentials via env var only** — remove default connection string from `config.py`
 - [ ] **Password validation** — enforce minimum length (8+), complexity rules on register
 
+### Critical (draft integrity)
+- [ ] **Re-enable draft turn enforcement** — `app/ws/draft_room.py` has the
+  "Not your turn" check commented out (`# TODO: re-enable turn enforcement after
+  testing`), and the line below it reassigns `user_id = expected_user`. Any
+  connected client can therefore make the pick for whoever is on the clock.
+- [ ] **Check league membership on WebSocket connect** — `ws/events.py` verifies
+  the JWT but never checks that the user belongs to the league, so any
+  authenticated user can join any draft room and receive its broadcasts.
+- [ ] **Restrict undo to the commissioner** — `handle_undo_pick` has no
+  authorization check; any connected client can undo the last pick.
+
 ### High
 - [ ] **Rate limiting on auth endpoints** — prevent brute force on login/register (e.g. `slowapi`)
 - [ ] **WebSocket auth via header** — currently passes JWT in query string which gets logged
@@ -29,9 +40,117 @@
 ---
 
 ## Data & Infrastructure (Pre-Launch)
+- [x] **Missing migration for `player_derived_stats`** — the table existed only in
+  the dev database; `alembic upgrade head` on a fresh DB didn't create it, which
+  would have broken Analytics and the AI assistant on first deploy. Added as
+  revision `b7e41f0c92a5`; the full chain now reproduces the model schema with
+  zero drift, verified both directions.
+- [x] **Broken migration downgrade** — `d5861c438c7e` emitted
+  `drop_constraint(None, ...)`, which cannot compile, so `alembic downgrade` had
+  never worked. Constraints are now named explicitly (matching the names
+  Postgres already assigned, so existing databases are unaffected).
+- [x] **Ranking provenance** — `base_rankings` now carries `season` and
+  `fetched_at`, so freshness is knowable. Previously there was no way to tell a
+  list pulled this morning from one pulled last August.
+- [x] **Stale hardcoded season defaults** — the ingest CLIs defaulted to
+  `--year 2025` / `--seasons 2022-2025`. Running a refresh in 2026 would have
+  silently repopulated the prior season. Now derived from the date in
+  `app/nfl_season.py`.
+- [x] **Operational tooling** — `scripts/doctor.py` (health + data consistency
+  report with fix suggestions) and `scripts/refresh_data.py` (one-command
+  ordered refresh that verifies itself). Documented in `RUNBOOK.md`.
+- [x] **CI** — `.github/workflows/ci.yml`: backend tests, fresh-database
+  migration + `alembic check` drift guard + downgrade check, frontend
+  typecheck/build.
 - [ ] **Automated DB backups** — Cloud SQL handles this on GCP, configure retention
 - [ ] **Lock down Alembic migrations** — no more drop/recreate once real users exist
 - [ ] **Environment-based config** — dev vs staging vs prod settings
+- [ ] **Scheduled refresh** — Cloud Scheduler hitting `scripts.refresh_data`
+  weekly in-season, once the app is deployed
+
+---
+
+## In-Season Data Handling
+
+The 2026 season starting exposed a family of bugs where a partially-played
+season made fully-loaded data look missing.
+
+- [x] **`min_games` floor made an in-progress season look empty** — the analytics
+  API and the assistant's `get_stat_leaders` both default to `games_played >= 3`.
+  In week 1 every player has exactly one game, so both returned zero rows while
+  the data was fully present (the Analytics page said "No data available. Run
+  the ingestion pipeline with step 6", which had in fact already run). Both now
+  clamp `min_games` to the weeks the season has actually reached.
+- [x] **Draft value panel was reading the in-progress season** — `useAnalyticsData`
+  picked the newest season with any data (2026), and `draftValue.ts` filters at
+  `DEFAULT_MIN_GAMES = 6`, so the entire VOR panel in the live draft room came
+  back empty. Replacement level and tier breaks are baselines and need a
+  complete season, so the hook now exposes `analysisSeason` (newest *complete*)
+  alongside `season` (newest), and the draft panel uses the former.
+- [x] **Assistant's data-coverage facts were hardcoded and had gone stale** — the
+  system prompt asserted "the 2026 season has not been played yet, so there are
+  NO 2026 stats" while the database held week 1. Coverage is now derived from the
+  DB on each request, and leaderboards for an in-progress season carry a `note`
+  telling the model to caveat the sample size.
+- [x] **Empty-state message blamed the wrong thing** — told the user to run step 6
+  regardless of cause. Now distinguishes "no data ingested for this season" from
+  "no players match the current filters".
+- [x] **Kickers had no stats in any season** — nflverse labels kickers `PK` in
+  `load_ff_playerids()` but `K` in `load_player_stats()`. Our position filter
+  only accepted `K`, so no kicker ever received a `gsis_id`, and since steps 3-6
+  join on `gsis_id` they got no weekly, season, or derived rows at all. The
+  Analytics "K" tab was empty in every season. Fixed with a `PK -> K` alias at
+  ingest; 153/155 kickers are now linked and populated. `scripts.doctor` now
+  fails if any fantasy position has zero rows for a completed season.
+
+### Open
+- [ ] **Kicker fantasy points are ~0** — nflverse's `fantasy_points_ppr` doesn't
+  include kicking scoring, so `ppr_per_game` for kickers is near zero and
+  sorting the K tab by its default column (PPR/G) is meaningless. Kickers are
+  also effectively unrankable in any cross-position VOR calculation. Fix:
+  compute kicker points ourselves from the distance buckets nflverse does
+  provide (`fg_made_0_19` ... `fg_made_60_`, `pat_made`) using standard scoring
+  (3 pts under 40, 4 for 40-49, 5 for 50+, 1 per XP). Needs new columns on
+  `player_weekly_stats` plus a migration, so it's a small feature rather than a
+  patch. Until then, default the K tab's sort to FG/G rather than PPR/G.
+- [ ] **In-progress season in cross-position widgets** — the boom/bust (8+ games)
+  and target-share (6+ games) charts are legitimately empty early in a season
+  since they need a real sample. They now say why, but a "not enough of the
+  season played yet" message would read better than the games-threshold wording.
+
+---
+
+## Code Health
+
+### Frontend lint — 31 ESLint errors (pre-existing)
+`npm run lint` is red. The build and typecheck are green; this is lint only.
+Breakdown:
+- **13x `@typescript-eslint/no-explicit-any`** — mostly `catch (err: any)` in
+  page components, plus a few Recharts callback props. Mechanical to fix: drop
+  the annotation and narrow with `err instanceof Error ? err.message : String(err)`.
+- **~10x `react-hooks` compiler errors** — "Calling setState synchronously
+  within an effect", "Cannot access variable before it is declared", "Cannot
+  call impure function during render". These come from the new compiler-aware
+  rules in eslint-plugin-react-hooks v7 and need actual effect restructuring,
+  not annotation changes. Do these deliberately, one page at a time.
+- **6x `react-refresh/only-export-components`** — context files exporting both a
+  provider component and a hook. Fix by splitting hooks into their own modules.
+- **1x `no-empty`**, **4 `exhaustive-deps` warnings**.
+
+Lint is deliberately not in CI until these are resolved — a permanently red
+check gets ignored, and a `continue-on-error` check is worse than none.
+
+### Test suite
+- [x] **Order-dependent test fixed** — `conftest.client` shared one
+  `expire_on_commit=False` session across every request in a test, so a
+  committed DELETE could still appear in a later GET via the identity map.
+  `TestBots::test_remove_bot` passed or failed purely on suite ordering. Each
+  request now gets its own session, matching production.
+- [ ] **WebSocket integration tests** — the draft room has no end-to-end test
+  covering connect / pick / timer / broadcast.
+- [ ] **AI assistant tests** — `assistant_tools.py` and `assistant_service.py`
+  have no coverage. The tool functions are pure DB queries and easy to test;
+  the agentic loop needs a stubbed client.
 
 ---
 
@@ -44,7 +163,7 @@
 ---
 
 ## Draft / CPU Logic
-- [ ] **Smarter CPU positional drafting** — CPUs currently pick best available by rank regardless of position. They should respect roster needs (e.g. don't draft 8 WRs). Should factor in `position_slots` config, track what positions the CPU team already has, and prioritize unfilled starting slots before bench picks. All major fantasy platforms (ESPN, Sleeper, Yahoo) do this.
+- [x] **Smarter CPU positional drafting** — CPUs currently pick best available by rank regardless of position. They should respect roster needs (e.g. don't draft 8 WRs). Should factor in `position_slots` config, track what positions the CPU team already has, and prioritize unfilled starting slots before bench picks. All major fantasy platforms (ESPN, Sleeper, Yahoo) do this.
 - [ ] **CPU draft variance** — add slight randomization so not all CPUs draft identically from the same source list (e.g. pick from top 3 available instead of always #1)
 
 ## League Settings
@@ -173,10 +292,10 @@ When a user clicks any player name (in rankings, draft board, available players 
 - [x] **Step 3:** Write weekly stats ingestion script (29,410 game logs from nflreadpy)
 - [x] **Step 4:** Write bio/combine ingestion script (3,215 player bios with combine measurables)
 - [x] **Step 5:** Write seasonal stats aggregation + snap counts merge (3,081 season rows, snap counts from nflverse)
-- [ ] **Step 6:** Create API endpoints: `GET /api/players/{id}/stats`, `GET /api/players/{id}/bio`, `GET /api/players/{id}/weekly?season=2024`
-- [ ] **Step 7:** Build player card modal component on frontend
-- [ ] **Step 8:** Wire player card into rankings page, draft board, and available players list
-- [ ] **Step 9:** Add charts/visualizations (sparklines, radar chart)
+- [x] **Step 6:** Create API endpoints: `GET /api/players/{id}/stats`, `GET /api/players/{id}/bio`, `GET /api/players/{id}/weekly?season=2024`
+- [x] **Step 7:** Build player card modal component on frontend
+- [x] **Step 8:** Wire player card into rankings page, draft board, and available players list
+- [x] **Step 9:** Add charts/visualizations (sparklines, radar chart)
 - [x] **Step 10:** Refactor rankings ingestion (ESPN, Sleeper) to match on external IDs instead of name (+ one-time `rankings_ingester.dedup` cleanup for existing duplicate Player rows)
 
 ---

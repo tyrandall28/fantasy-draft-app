@@ -146,7 +146,7 @@ export default function TargetShareAirYardsChart({ data, position }: Props) {
   if (scatterData.length === 0) {
     return (
       <div className="flex items-center justify-center h-[450px] text-slate-500">
-        No target share / air yards data available for {position}s.
+        No target share / air yards data available for {position}s (requires players with 6+ games).
       </div>
     );
   }

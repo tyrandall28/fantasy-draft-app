@@ -1,13 +1,24 @@
 """Analytics API endpoints for derived player stats."""
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DB
-from app.models.player import Player, PlayerDerivedStats
+from app.models.player import Player, PlayerDerivedStats, PlayerWeeklyStat
+from app.nfl_season import REGULAR_SEASON_WEEKS
 from app.schemas.player import PlayerDerivedStatsResponse
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+
+
+async def _weeks_played(db: DB, season: int) -> int | None:
+    """How many weeks of the given season have game logs. None if the season
+    hasn't started (or wasn't ingested)."""
+    return (
+        await db.execute(
+            select(func.max(PlayerWeeklyStat.week)).where(PlayerWeeklyStat.season == season)
+        )
+    ).scalar()
 
 VALID_POSITIONS = {"QB", "RB", "WR", "TE", "K"}
 VALID_SORT_FIELDS = {
@@ -43,6 +54,14 @@ async def get_position_rankings(
         sort_dir = "desc"
     if limit > 200:
         limit = 200
+
+    # `min_games` filters out small-sample noise, but it can't ask for more games
+    # than the season has had. In week 1 every player has games_played=1, so the
+    # default of 3 would match nothing and the page would look empty even though
+    # the data is fully loaded. Clamp to the weeks actually played.
+    weeks = await _weeks_played(db, season)
+    if weeks is not None:
+        min_games = min(min_games, weeks)
 
     col = getattr(PlayerDerivedStats, sort_by)
     order = col.desc().nullslast() if sort_dir == "desc" else col.asc().nullsfirst()
@@ -156,3 +175,49 @@ async def get_available_seasons(db: DB):
         .order_by(PlayerDerivedStats.season.desc())
     )
     return [r[0] for r in result.all()]
+
+
+@router.get("/seasons/detail")
+async def get_seasons_detail(db: DB):
+    """Every season with derived stats, newest first, plus how complete it is.
+
+    Consumers need different seasons for different jobs, and "newest" is the
+    wrong default for some of them:
+      - The analytics explorer defaults to newest, and warns when it's partial.
+      - Draft value (VOR, replacement level) needs a *complete* season; one week
+        of games can't establish a replacement baseline.
+    Returning completeness here lets each caller choose correctly from one
+    request, instead of guessing from the season number.
+    """
+    weeks_by_season = dict(
+        (
+            await db.execute(
+                select(PlayerWeeklyStat.season, func.max(PlayerWeeklyStat.week)).group_by(
+                    PlayerWeeklyStat.season
+                )
+            )
+        ).all()
+    )
+    rows = (
+        await db.execute(
+            select(
+                PlayerDerivedStats.season,
+                func.max(PlayerDerivedStats.games_played),
+            )
+            .group_by(PlayerDerivedStats.season)
+            .order_by(PlayerDerivedStats.season.desc())
+        )
+    ).all()
+
+    return [
+        {
+            "season": season,
+            "weeks_played": weeks_by_season.get(season) or 0,
+            "max_games_played": max_games or 0,
+            "is_complete": bool(
+                weeks_by_season.get(season) and weeks_by_season[season] >= REGULAR_SEASON_WEEKS
+            ),
+            "regular_season_weeks": REGULAR_SEASON_WEEKS,
+        }
+        for season, max_games in rows
+    ]

@@ -3,6 +3,7 @@ import { apiFetch } from "../api/client";
 import type {
   PlayerDerivedStats,
   PlayerWeekly,
+  SeasonInfo,
   SparklineData,
 } from "../types";
 
@@ -10,9 +11,18 @@ import type {
  * Shared analytics data hook for the Rankings page contextual panel.
  * Caches position group stats, sparklines, and weekly data per-selection
  * so repeated clicks don't re-hit the API.
+ *
+ * Exposes two seasons, because "latest" is the wrong answer for some callers:
+ *   `season`         - newest season with any data. Good for browsing.
+ *   `analysisSeason` - newest *complete* season. Use this anywhere a baseline
+ *                      is being computed (VOR, replacement level, tiers);
+ *                      one week of games can't support one.
+ * Early in a season these differ, and that difference is the whole point.
  */
 export function useAnalyticsData() {
+  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
   const [season, setSeason] = useState<number | null>(null);
+  const [analysisSeason, setAnalysisSeason] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Caches
@@ -20,13 +30,21 @@ export function useAnalyticsData() {
   const sparklineCache = useRef<Map<string, SparklineData>>(new Map());
   const weeklyCache = useRef<Map<string, PlayerWeekly[]>>(new Map());
 
-  // Fetch latest available season once on mount
+  // Fetch the season inventory once on mount
   useEffect(() => {
-    apiFetch<number[]>("/api/analytics/seasons")
-      .then((seasons) => {
-        if (seasons.length > 0) setSeason(seasons[0]);
+    apiFetch<SeasonInfo[]>("/api/analytics/seasons/detail")
+      .then((rows) => {
+        if (rows.length === 0) return;
+        setSeasons(rows);
+        setSeason(rows[0].season);
+        // Fall back to newest if nothing is complete (e.g. only the current
+        // season has been ingested) -- better than showing nothing at all.
+        setAnalysisSeason((rows.find((r) => r.is_complete) ?? rows[0]).season);
       })
-      .catch(() => setSeason(null));
+      .catch(() => {
+        setSeason(null);
+        setAnalysisSeason(null);
+      });
   }, []);
 
   const fetchPositionData = useCallback(
@@ -99,7 +117,9 @@ export function useAnalyticsData() {
   );
 
   return {
+    seasons,
     season,
+    analysisSeason,
     loading,
     fetchPositionData,
     fetchSparklines,

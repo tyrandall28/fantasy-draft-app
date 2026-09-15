@@ -10,9 +10,9 @@ Steps:
 
 Usage:
   cd backend
-  PYTHONPATH=. python -m rankings_ingester.ingest_stats [--seasons 2022 2023 2024 2025] [--dry-run]
-  PYTHONPATH=. python -m rankings_ingester.ingest_stats --seasons 2026 --steps 3 4 5       # incremental weekly update
-  PYTHONPATH=. python -m rankings_ingester.ingest_stats --seasons 2026 --full-refresh       # re-download everything
+  python -m rankings_ingester.ingest_stats [--seasons 2022 2023 2024 2025] [--dry-run]
+  python -m rankings_ingester.ingest_stats --seasons 2026 --steps 3 4 5       # incremental weekly update
+  python -m rankings_ingester.ingest_stats --seasons 2026 --full-refresh       # re-download everything
 """
 import argparse
 import asyncio
@@ -27,13 +27,33 @@ import nflreadpy as nfl
 from sqlalchemy import select, func, delete
 
 from app.database import async_session
+from app.nfl_season import default_stat_seasons
 from app.models.player import Player, PlayerBio, PlayerDerivedStats, PlayerSeason, PlayerWeeklyStat
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Fantasy-relevant positions
+# Fantasy-relevant positions, in *our* vocabulary (matches the ranking sources).
 FANTASY_POSITIONS = {"QB", "RB", "WR", "TE", "K"}
+
+# nflverse is not internally consistent about kickers: `load_ff_playerids()`
+# labels them "PK" while `load_player_stats()` labels them "K". Filtering the
+# ID table on our own vocabulary therefore dropped every kicker, so none of them
+# ever received a gsis_id -- and because steps 3-6 join on gsis_id, kickers got
+# no weekly, season, or derived stats at all. The Analytics "K" tab was empty in
+# every season as a result. Normalize the label on the way in.
+POSITION_ALIASES = {"PK": "K"}
+
+# The labels to accept from nflverse's ID table before normalization.
+NFLVERSE_FANTASY_POSITIONS = FANTASY_POSITIONS | set(POSITION_ALIASES)
+
+
+def normalize_position(pos: str | None) -> str | None:
+    """Map an nflverse position label into our vocabulary ("PK" -> "K")."""
+    if not pos:
+        return None
+    pos = pos.upper()
+    return POSITION_ALIASES.get(pos, pos)
 
 # ---------- Validation constants ----------
 
@@ -194,8 +214,9 @@ async def step1_external_ids(dry_run: bool = False):
     logger.info("Step 1: Loading player IDs from nflverse...")
     ids_df = nfl.load_ff_playerids()
 
-    # Filter to fantasy-relevant positions
-    ids_df = ids_df.filter(ids_df["position"].is_in(list(FANTASY_POSITIONS)))
+    # Filter to fantasy-relevant positions, accepting nflverse's own labels
+    # (notably "PK" for kickers) before they're normalized per row below.
+    ids_df = ids_df.filter(ids_df["position"].is_in(list(NFLVERSE_FANTASY_POSITIONS)))
     logger.info(f"  {len(ids_df)} fantasy-relevant players in nflverse")
 
     async with async_session() as db:
@@ -241,7 +262,7 @@ async def step1_external_ids(dry_run: bool = False):
 
         for row in ids_df.iter_rows(named=True):
             name = safe_str(row.get("name"))
-            position = safe_str(row.get("position"))
+            position = normalize_position(safe_str(row.get("position")))
             team = safe_str(row.get("team")) or "UNK"
             gsis_id = safe_str(row.get("gsis_id"))
             espn_id = safe_int(row.get("espn_id"))
@@ -865,10 +886,14 @@ async def step6_compute_derived_stats(seasons: list[int], dry_run: bool = False)
 
 async def main():
     parser = argparse.ArgumentParser(description="Ingest player stats from nflverse")
+    default_seasons = default_stat_seasons()
     parser.add_argument(
         "--seasons", nargs="+", type=int,
-        default=[2022, 2023, 2024, 2025],
-        help="Seasons to ingest (default: 2022-2025)",
+        default=default_seasons,
+        help=(
+            "Seasons to ingest (default: the last 4 completed seasons plus the "
+            f"in-progress one — currently {default_seasons[0]}-{default_seasons[-1]})"
+        ),
     )
     parser.add_argument("--dry-run", action="store_true", help="Don't write to DB")
     parser.add_argument(
@@ -884,6 +909,14 @@ async def main():
     logger.info(f"Ingesting stats for seasons: {args.seasons}")
     if args.dry_run:
         logger.info("[DRY RUN MODE]")
+        # Steps 4-6 derive from what's already committed, so a dry run only
+        # proves the *downloads* (steps 1-3) are healthy. On an empty database
+        # a full dry run reports zeros for 4-6 -- that's expected, not a failure.
+        if any(step in args.steps for step in (4, 5, 6)):
+            logger.info(
+                "[DRY RUN] Steps 4-6 re-derive from data already in the DB; "
+                "their counts reflect existing rows, not this run's downloads."
+            )
     if args.full_refresh:
         logger.info("[FULL REFRESH MODE]")
     else:

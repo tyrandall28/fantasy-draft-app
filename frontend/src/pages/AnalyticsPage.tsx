@@ -5,7 +5,7 @@ import BoomBustChart from "../components/analytics/BoomBustChart";
 import CompareRadarChart from "../components/analytics/CompareRadarChart";
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
 import Sparkline from "../components/analytics/Sparkline";
-import type { PlayerDerivedStats } from "../types";
+import type { PlayerDerivedStats, SeasonInfo } from "../types";
 
 interface SparklinePoint {
   season: number;
@@ -90,7 +90,7 @@ const SMALL_SAMPLE_THRESHOLD = 8;
 export default function AnalyticsPage() {
   const [position, setPosition] = useState<string>("QB");
   const [season, setSeason] = useState<number>(2025);
-  const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
+  const [seasonInfo, setSeasonInfo] = useState<SeasonInfo[]>([]);
   const [sortBy, setSortBy] = useState<SortField>("ppr_per_game");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [rawData, setRawData] = useState<PlayerDerivedStats[]>([]);
@@ -103,12 +103,18 @@ export default function AnalyticsPage() {
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareSearch, setCompareSearch] = useState("");
 
-  // Fetch available seasons on mount
+  const currentSeasonInfo = useMemo(
+    () => seasonInfo.find((info) => info.season === season) ?? null,
+    [seasonInfo, season]
+  );
+
+  // Fetch the season inventory on mount. One request gives us both the
+  // selector options and each season's completeness.
   useEffect(() => {
-    apiFetch<number[]>("/api/analytics/seasons").then((seasons) => {
-      if (seasons.length > 0) {
-        setAvailableSeasons(seasons);
-        setSeason(seasons[0]);
+    apiFetch<SeasonInfo[]>("/api/analytics/seasons/detail").then((rows) => {
+      if (rows.length > 0) {
+        setSeasonInfo(rows);
+        setSeason(rows[0].season);
       }
     });
   }, []);
@@ -244,9 +250,10 @@ export default function AnalyticsPage() {
           onChange={(e) => setSeason(Number(e.target.value))}
           className="bg-white/5 border border-white/10 text-white text-sm rounded-lg px-3 py-1.5"
         >
-          {availableSeasons.map((s) => (
-            <option key={s} value={s} className="bg-[#1a1d28]">
-              {s}
+          {seasonInfo.map((info) => (
+            <option key={info.season} value={info.season} className="bg-[#1a1d28]">
+              {info.season}
+              {info.is_complete ? "" : " (in progress)"}
             </option>
           ))}
         </select>
@@ -275,6 +282,30 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {/* In-progress season notice. Early in a season every per-game rate comes
+          off a one- or two-game sample, so the leaderboard is mostly noise —
+          say so rather than presenting it as settled. */}
+      {currentSeasonInfo && !currentSeasonInfo.is_complete && currentSeasonInfo.weeks_played > 0 && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+          <span className="text-amber-400 text-sm leading-5">●</span>
+          <p className="text-sm text-amber-100/80 leading-5">
+            <span className="font-medium text-amber-100">
+              {currentSeasonInfo.season} season in progress
+            </span>{" "}
+            — data through week {currentSeasonInfo.weeks_played} of{" "}
+            {currentSeasonInfo.regular_season_weeks}. Per-game averages come from as
+            few as {currentSeasonInfo.max_games_played}{" "}
+            {currentSeasonInfo.max_games_played === 1 ? "game" : "games"}, so rankings
+            will swing a lot week to week.{" "}
+            {seasonInfo.length > 1 && (
+              <>
+                Pick {currentSeasonInfo.season - 1} for a full season.
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Boom/Bust Scatter Chart */}
       {activeTab === "boom-bust" && (
@@ -493,7 +524,17 @@ export default function AnalyticsPage() {
               ) : players.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + 4} className="text-center text-slate-500 py-16 text-base">
-                    No data available. Run the ingestion pipeline with step 6.
+                    {currentSeasonInfo && currentSeasonInfo.weeks_played === 0 ? (
+                      <>
+                        No {season} game data has been ingested yet.
+                        <span className="block mt-1 text-sm text-slate-600">
+                          Run <code className="text-slate-400">python -m scripts.doctor</code> to
+                          see what's loaded.
+                        </span>
+                      </>
+                    ) : (
+                      <>No {position}s match the current filters for {season}.</>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -537,11 +578,16 @@ export default function AnalyticsPage() {
       </div>
       )}
 
-      {activeTab === "rankings" && players.some((p) => p.games_played < SMALL_SAMPLE_THRESHOLD) && (
-        <p className="mt-3 text-xs text-slate-500">
-          <span className="text-amber-400/80">*</span> Players with fewer than {SMALL_SAMPLE_THRESHOLD} games — per-game rates may be inflated
-        </p>
-      )}
+      {/* Only worth saying when *some* players are short of a full sample. Mid-season
+          that's the injured guys; in week 1 it's everyone, and the notice above
+          already covers it. */}
+      {activeTab === "rankings" &&
+        !(currentSeasonInfo && !currentSeasonInfo.is_complete) &&
+        players.some((p) => p.games_played < SMALL_SAMPLE_THRESHOLD) && (
+          <p className="mt-3 text-xs text-slate-500">
+            <span className="text-amber-400/80">*</span> Players with fewer than {SMALL_SAMPLE_THRESHOLD} games — per-game rates may be inflated
+          </p>
+        )}
     </div>
   );
 }

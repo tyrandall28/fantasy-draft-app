@@ -55,7 +55,11 @@ interface UseDraftValueAnalysisResult {
 export function useDraftValueAnalysis(
   options: UseDraftValueAnalysisOptions = {}
 ): UseDraftValueAnalysisResult {
-  const { season, fetchPositionData } = useAnalyticsData();
+  // Deliberately the newest *complete* season, not the newest one with data.
+  // Replacement level and tier breaks are baselines: computed off week 1 of an
+  // in-progress season they'd be noise, and with a 6-game floor the pool would
+  // come back empty and the whole panel would render as "no data".
+  const { analysisSeason: season, fetchPositionData } = useAnalyticsData();
   const [pool, setPool] = useState<PlayerDerivedStats[]>([]);
   const [fetching, setFetching] = useState(false);
 
