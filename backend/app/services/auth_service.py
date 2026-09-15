@@ -1,25 +1,46 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.user import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 ALGORITHM = "HS256"
+
+# bcrypt only ever hashes the first 72 bytes of a password. Older versions
+# silently truncated anything longer; bcrypt 5.0 raises instead. We truncate
+# explicitly, which is also what passlib did, so hashes created before this
+# module stopped using passlib still verify.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _to_bcrypt_input(password: str) -> bytes:
+    return password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password with bcrypt, returning the standard `$2b$` string.
+
+    Uses the `bcrypt` package directly rather than passlib: passlib 1.7.4 is
+    unmaintained and detects its backend via `bcrypt.__about__.__version__`,
+    which bcrypt removed in 4.1. On bcrypt 5.x that detection fails and every
+    hash/verify call raises, so a fresh install had completely broken auth
+    while a pinned-old local environment looked fine.
+    """
+    return bcrypt.hashpw(_to_bcrypt_input(password), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_to_bcrypt_input(plain), hashed.encode("ascii"))
+    except (ValueError, TypeError):
+        # Malformed or non-bcrypt stored hash — treat as a failed login rather
+        # than a 500.
+        return False
 
 
 def create_access_token(user_id: uuid.UUID) -> str:

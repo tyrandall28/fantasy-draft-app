@@ -70,6 +70,36 @@
 
 ---
 
+## Dependency Pinning
+
+- [x] **Fresh installs had completely broken auth** — `requirements.txt` had
+  `passlib[bcrypt]==1.7.4` with bcrypt itself unpinned. Local dev had bcrypt
+  4.0.1; any fresh install (CI, and a GCP deploy) got bcrypt 5.0.0. passlib
+  1.7.4 detects its backend via `bcrypt.__about__.__version__`, removed in
+  bcrypt 4.1, so detection failed and its 72-byte probe hit bcrypt 5's new
+  hard error: every `hash_password`/`verify_password` raised
+  `ValueError: password cannot be longer than 72 bytes`. Caught by the first CI
+  run. passlib is unmaintained (last release 2020), so it's gone — auth now
+  calls `bcrypt` directly. Hash format is unchanged (`$2b$`), and tests pin
+  backward compatibility against real passlib-generated hashes, including the
+  72-byte truncation behaviour so long-password users aren't locked out.
+- [x] **`anthropic` was unpinned** (`>=0.49.0`) — local had 0.111.0, CI resolved
+  to 1.6.0, a major version apart. Both happen to work with our usage, but the
+  divergence was invisible. Pinned to `==1.6.0` and the local venv upgraded to
+  match.
+
+### Open
+- [ ] **No real lockfile for Python** — `requirements.txt` pins direct
+  dependencies but not the transitive tree, which is exactly how bcrypt drifted.
+  `pip-tools` (`requirements.in` -> compiled `requirements.txt` with hashes) or
+  `uv` would make local and CI provably identical. Worth doing before deploying.
+- [ ] **CI Node version vs local** — CI uses `node-version: "20"` while local dev
+  is on v24.19.0. Vite 7 requires `^20.19 || >=22.12`, so both satisfy it, but
+  matching them (or adding an `engines` field plus `.nvmrc`) would remove
+  another source of "works locally, fails in CI".
+
+---
+
 ## In-Season Data Handling
 
 The 2026 season starting exposed a family of bugs where a partially-played
