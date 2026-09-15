@@ -51,7 +51,7 @@ export default function AvailablePlayerList({ draftedPlayerIds, onPick, canPick 
   }, [selectedRankingId]);
 
   // Build the player list: use ranking order if available, fallback to all players
-  const playerList: { id: number; full_name: string; position: string; nfl_team: string; bye_week: number; rank?: number }[] = [];
+  const playerList: { id: number; full_name: string; position: string; nfl_team: string; bye_week: number | null; rank?: number }[] = [];
 
   if (rankingDetail) {
     for (const entry of rankingDetail.entries) {

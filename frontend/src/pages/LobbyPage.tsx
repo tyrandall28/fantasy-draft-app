@@ -338,7 +338,7 @@ export default function LobbyPage() {
                     <th className="py-2.5 px-2 text-slate-500 font-medium text-center sticky left-0 bg-[#12141b] z-20">
                       RD
                     </th>
-                    {positionSlots.map((slot, i) => {
+                    {positionSlots.map((slot) => {
                       const isMe = slot.member?.user_id === user?.id;
                       const isEmpty = !slot.member;
                       const isBot = slot.member?.is_bot;

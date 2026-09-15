@@ -12,7 +12,7 @@ interface UseWebSocketOptions {
 export function useWebSocket({ url, onMessage, getToken, enabled = true }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
-  const reconnectTimeout = useRef<number>();
+  const reconnectTimeout = useRef<number | undefined>(undefined);
   const reconnectDelay = useRef(1000);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;

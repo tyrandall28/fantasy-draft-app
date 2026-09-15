@@ -74,6 +74,22 @@ export interface PlayerSeason {
   snap_pct: number | null;
 }
 
+/**
+ * A season with derived stats, and how complete it is
+ * (GET /api/analytics/seasons/detail).
+ *
+ * `is_complete` matters: an in-progress season's per-game rates come off a
+ * one- or two-game sample, which is fine to explore but useless as a draft
+ * baseline.
+ */
+export interface SeasonInfo {
+  season: number;
+  weeks_played: number;
+  max_games_played: number;
+  is_complete: boolean;
+  regular_season_weeks: number;
+}
+
 export interface PlayerWeekly {
   season: number;
   week: number;
@@ -95,6 +111,9 @@ export interface PlayerWeekly {
   target_share: number | null;
   fg_made: number | null;
   fg_att: number | null;
+  fg_long: number | null;
+  pat_made: number | null;
+  pat_att: number | null;
   fantasy_points: number | null;
   fantasy_points_ppr: number | null;
   snap_count: number | null;

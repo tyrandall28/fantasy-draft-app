@@ -46,8 +46,6 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
 
   // Build lookup: player_id -> base rank (for analysis)
   const baseRankMap = new Map(baseEntries.map((e) => [e.player_id, e.rank]));
-  // Build lookup: player_id -> user rank (for analysis)
-  const userRankMap = new Map(userEntries.map((e) => [e.player_id, e.rank]));
 
   const filteredBase = filter
     ? baseEntries.filter(

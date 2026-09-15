@@ -127,6 +127,8 @@ interface CurvePoint {
   RB?: number | null;
   WR?: number | null;
   TE?: number | null;
+  /** Positions are assigned dynamically in buildCurveChartData. */
+  [position: string]: number | null | undefined;
 }
 
 function buildCurveChartData(curves: PositionCurve[]): CurvePoint[] {
@@ -137,8 +139,7 @@ function buildCurveChartData(curves: PositionCurve[]): CurvePoint[] {
     const point: CurvePoint = { rank: r };
     for (const curve of curves) {
       const player = curve.players[r - 1];
-      (point as Record<string, number | null | undefined>)[curve.position] =
-        player ? player.ppg : null;
+      point[curve.position] = player ? player.ppg : null;
     }
     points.push(point);
   }
