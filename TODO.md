@@ -103,20 +103,40 @@ season made fully-loaded data look missing.
   ingest; 153/155 kickers are now linked and populated. `scripts.doctor` now
   fails if any fantasy position has zero rows for a completed season.
 
+### Incomplete positions are now labelled, not silently empty
+- [x] **K and DST carry an explicit "coming soon" notice** — a single source of
+  truth in `frontend/src/lib/positionData.ts` describes what data each position
+  actually has and why, rendered by `PositionDataNotice`. Applied on the
+  Analytics page (dimmed tab + badge + notice panel), the player card, and the
+  rankings analytics column. DST previously fell back to `KEY_STATS["WR"]`, so a
+  defense rendered with receiving labels and a column of dashes.
+- [x] **No more structurally-zero metrics on display** — PPR columns removed from
+  the kicker table and key-stat grid, the K tab lands sorted on FG/G, and the
+  PPR trend sparkline is hidden (and not even fetched) for positions without
+  fantasy scoring.
+
 ### Open
 - [ ] **Kicker fantasy points are ~0** — nflverse's `fantasy_points_ppr` doesn't
-  include kicking scoring, so `ppr_per_game` for kickers is near zero and
-  sorting the K tab by its default column (PPR/G) is meaningless. Kickers are
-  also effectively unrankable in any cross-position VOR calculation. Fix:
-  compute kicker points ourselves from the distance buckets nflverse does
-  provide (`fg_made_0_19` ... `fg_made_60_`, `pat_made`) using standard scoring
-  (3 pts under 40, 4 for 40-49, 5 for 50+, 1 per XP). Needs new columns on
-  `player_weekly_stats` plus a migration, so it's a small feature rather than a
-  patch. Until then, default the K tab's sort to FG/G rather than PPR/G.
+  include kicking scoring, so `ppr_per_game` for kickers is near zero and they
+  are effectively unrankable in any cross-position VOR calculation. The UI now
+  hides and explains this rather than showing zeros, but the underlying data is
+  still missing. Fix: compute kicker points ourselves from the distance buckets
+  nflverse does provide (`fg_made_0_19` ... `fg_made_60_`, `pat_made`) using
+  standard scoring (3 pts under 40, 4 for 40-49, 5 for 50+, 1 per XP). Needs new
+  columns on `player_weekly_stats` plus a migration, so it's a small feature
+  rather than a patch.
+- [ ] **Team defense stats entirely absent** — nflverse models defenses as teams,
+  not players, so DST has no gsis_id and no stats of any kind. Would need a
+  separate team-level ingest (points allowed, sacks, takeaways, defensive TDs)
+  and its own table. Larger than the kicker gap; DST is labelled in the UI for
+  now.
 - [ ] **In-progress season in cross-position widgets** — the boom/bust (8+ games)
   and target-share (6+ games) charts are legitimately empty early in a season
   since they need a real sample. They now say why, but a "not enough of the
   season played yet" message would read better than the games-threshold wording.
+- [ ] **No frontend test runner** — `positionData.ts` and the season-selection
+  logic in `useAnalyticsData` are pure functions worth unit testing, but the
+  project has no Vitest setup. Backend has 144 tests; frontend has none.
 
 ---
 

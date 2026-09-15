@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import Sparkline from "../analytics/Sparkline";
 import WeeklyTrendChart from "../analytics/WeeklyTrendChart";
+import PositionDataNotice from "../analytics/PositionDataNotice";
+import { hasFantasyPoints, positionNotice } from "../../lib/positionData";
 import type {
   PlayerDerivedStats,
   PlayerWeekly,
@@ -52,10 +54,11 @@ const KEY_STATS: Record<string, StatDef[]> = {
     { key: "targets_per_game", label: "Tgt/G", format: fmt1 },
     { key: "catch_rate", label: "Catch%", format: fmtPct },
   ],
+  // No PPR/G here: nflverse doesn't score kicking, so it would always be 0.
   K: [
-    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
-    { key: "fg_pct", label: "FG%", format: fmtPct },
     { key: "fg_made_per_game", label: "FG/G", format: fmt2 },
+    { key: "fg_pct", label: "FG%", format: fmtPct },
+    { key: "fg_long", label: "Long FG", format: fmt1 },
     { key: "xp_pct", label: "XP%", format: fmtPct },
   ],
 };
@@ -99,7 +102,11 @@ export default function PlayerAnalyticsColumn({
   compact = false,
 }: Props) {
   const position = entry.player.position;
-  const statDefs = KEY_STATS[position] ?? KEY_STATS["WR"];
+  const notice = positionNotice(position);
+  // Fall back to the WR layout only for positions we simply don't have a
+  // bespoke stat set for -- never for one with no data, which would otherwise
+  // render a defense with receiving labels and a column of dashes.
+  const statDefs = KEY_STATS[position] ?? (notice?.level === "none" ? [] : KEY_STATS["WR"]);
 
   const sortedByMetric = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -137,8 +144,11 @@ export default function PlayerAnalyticsColumn({
         </p>
       </div>
 
+      {/* Why this position's analytics are thin or absent */}
+      {notice && <PositionDataNotice notice={notice} variant="compact" />}
+
       {/* Loading / no-stats states */}
-      {!stats && !loading && (
+      {!stats && !loading && !notice && (
         <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 text-center">
           <p className="text-xs text-slate-500">No season stats available.</p>
         </div>
@@ -195,8 +205,9 @@ export default function PlayerAnalyticsColumn({
         </div>
       )}
 
-      {/* Career sparkline */}
-      {sparkline.length >= 2 && (
+      {/* Career sparkline. PPR-based, so skip it for positions without fantasy
+          scoring -- it would just draw a flat line at zero. */}
+      {sparkline.length >= 2 && hasFantasyPoints(position) && (
         <div>
           <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
             Career Trend (PPR/G)

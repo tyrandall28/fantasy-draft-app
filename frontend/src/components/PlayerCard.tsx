@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
 import WeeklyTrendChart from "./analytics/WeeklyTrendChart";
+import PositionDataNotice from "./analytics/PositionDataNotice";
+import { positionNotice } from "../lib/positionData";
 import type { PlayerDetail, PlayerWeekly } from "../types";
 
 const POS_COLOR: Record<string, string> = {
@@ -80,6 +82,7 @@ export default function PlayerCard({ playerId, onClose }: Props) {
   if (!playerId) return null;
 
   const pos = detail?.player.position ?? "";
+  const cardNotice = positionNotice(pos);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -174,6 +177,14 @@ export default function PlayerCard({ playerId, onClose }: Props) {
               )}
             </div>
 
+            {/* Why this position's stats are thin or absent — shown before the
+                tabs so a defense's empty tables read as expected, not broken. */}
+            {cardNotice && (
+              <div className="p-3 pb-0">
+                <PositionDataNotice notice={cardNotice} variant="compact" />
+              </div>
+            )}
+
             {/* Tabs */}
             <div className="flex border-b border-white/5">
               <button
@@ -219,7 +230,11 @@ export default function PlayerCard({ playerId, onClose }: Props) {
             {tab === "seasons" && (
               <div className="p-3">
                 {detail.seasons.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-8">No stats available</p>
+                  <p className="text-sm text-slate-500 text-center py-8">
+                    {cardNotice?.level === "none"
+                      ? "No season stats exist for this position."
+                      : "No stats available"}
+                  </p>
                 ) : (
                   <SeasonTable seasons={detail.seasons} position={pos} />
                 )}

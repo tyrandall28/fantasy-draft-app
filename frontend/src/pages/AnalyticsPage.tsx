@@ -5,6 +5,8 @@ import BoomBustChart from "../components/analytics/BoomBustChart";
 import CompareRadarChart from "../components/analytics/CompareRadarChart";
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
 import Sparkline from "../components/analytics/Sparkline";
+import PositionDataNotice from "../components/analytics/PositionDataNotice";
+import { hasFantasyPoints, positionNotice } from "../lib/positionData";
 import type { PlayerDerivedStats, SeasonInfo } from "../types";
 
 interface SparklinePoint {
@@ -75,14 +77,19 @@ const COLUMNS_BY_POSITION: Record<string, ColumnDef[]> = {
     { key: "snap_pct", label: "Snap%", format: fmtPct },
     { key: "fantasy_points_ppr", label: "Total PPR", format: fmt1 },
   ],
+  // No PPR columns: nflverse doesn't score kicking, so they'd be a column of
+  // zeros. The notice above the table explains it; see lib/positionData.ts.
   K: [
-    { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
-    { key: "fg_pct", label: "FG%", format: fmtPct },
     { key: "fg_made_per_game", label: "FG/G", format: fmt2 },
+    { key: "fg_pct", label: "FG%", format: fmtPct },
     { key: "fg_long", label: "Long FG", format: fmtInt },
     { key: "xp_pct", label: "XP%", format: fmtPct },
-    { key: "fantasy_points_ppr", label: "Total PPR", format: fmt1 },
   ],
+};
+
+/** Landing sort per position — never a metric that's structurally zero. */
+const DEFAULT_SORT_BY_POSITION: Record<string, SortField> = {
+  K: "fg_made_per_game",
 };
 
 const SMALL_SAMPLE_THRESHOLD = 8;
@@ -107,6 +114,10 @@ export default function AnalyticsPage() {
     () => seasonInfo.find((info) => info.season === season) ?? null,
     [seasonInfo, season]
   );
+  const activePositionNotice = positionNotice(position);
+  // The trend sparkline plots PPR/G, which is structurally zero for kickers
+  // and defenses -- a flat line at the axis reads as a broken chart.
+  const showTrend = hasFantasyPoints(position);
 
   // Fetch the season inventory on mount. One request gives us both the
   // selector options and each season's completeness.
@@ -146,9 +157,10 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   }, [position, season]);
 
-  // Fetch sparkline data after rawData loads
+  // Fetch sparkline data after rawData loads. Skipped entirely when the trend
+  // column is hidden, so the K tab doesn't request 100 flat-zero series.
   useEffect(() => {
-    if (rawData.length === 0) return;
+    if (rawData.length === 0 || !showTrend) return;
     const ids = rawData.map((p) => p.player_id);
     const cacheKey = ids.sort().join(",");
     const cached = sparklineCache.current.get(cacheKey);
@@ -162,7 +174,7 @@ export default function AnalyticsPage() {
         setSparklines(data);
       })
       .catch(() => setSparklines({}));
-  }, [rawData]);
+  }, [rawData, showTrend]);
 
   // Sort client-side
   const players = useMemo(() => {
@@ -223,26 +235,45 @@ export default function AnalyticsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex bg-white/5 rounded-lg p-0.5">
-          {POSITIONS.map((pos) => (
-            <button
-              key={pos}
-              onClick={() => {
-                setPosition(pos);
-                setSortBy("ppr_per_game");
-                setSortDir("desc");
-                if (activeTab === "target-air" && pos !== "WR" && pos !== "TE") {
-                  setActiveTab("rankings");
-                }
-              }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md ${
-                position === pos
-                  ? "bg-sky-500 text-white"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              {pos}
-            </button>
-          ))}
+          {POSITIONS.map((pos) => {
+            const notice = positionNotice(pos);
+            return (
+              <button
+                key={pos}
+                onClick={() => {
+                  setPosition(pos);
+                  // PPR/G is meaningless for positions without fantasy scoring,
+                  // so don't land the user on a column of zeros.
+                  setSortBy(DEFAULT_SORT_BY_POSITION[pos] ?? "ppr_per_game");
+                  setSortDir("desc");
+                  if (activeTab === "target-air" && pos !== "WR" && pos !== "TE") {
+                    setActiveTab("rankings");
+                  }
+                }}
+                title={notice ? notice.title : undefined}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md ${
+                  position === pos
+                    ? "bg-sky-500 text-white"
+                    : notice
+                      ? "text-slate-600 hover:text-slate-400"
+                      : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {pos}
+                {notice && (
+                  <span
+                    className={`rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
+                      position === pos
+                        ? "bg-white/20 text-white"
+                        : "bg-amber-400/10 text-amber-400/70"
+                    }`}
+                  >
+                    {notice.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <select
@@ -282,6 +313,14 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {/* Why this position's analytics are incomplete, above whatever real data
+          it does have. */}
+      {activePositionNotice && (
+        <div className="mb-4">
+          <PositionDataNotice notice={activePositionNotice} />
+        </div>
+      )}
 
       {/* In-progress season notice. Early in a season every per-game rate comes
           off a one- or two-game sample, so the leaderboard is mostly noise —
@@ -497,7 +536,9 @@ export default function AnalyticsPage() {
                 <th className="text-left text-slate-500 text-sm font-medium px-5 py-3.5 w-10">#</th>
                 <th className="text-left text-slate-500 text-sm font-medium px-5 py-3.5">Player</th>
                 <th className="text-center text-slate-500 text-sm font-medium px-4 py-3.5">GP</th>
-                <th className="text-center text-slate-500 text-sm font-medium px-4 py-3.5">Trend</th>
+                {showTrend && (
+                  <th className="text-center text-slate-500 text-sm font-medium px-4 py-3.5">Trend</th>
+                )}
                 {columns.map((col) => (
                   <th
                     key={col.key}
@@ -517,13 +558,13 @@ export default function AnalyticsPage() {
             <tbody>
               {loading && players.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 4} className="text-center text-slate-500 py-16 text-base">
+                  <td colSpan={columns.length + (showTrend ? 4 : 3)} className="text-center text-slate-500 py-16 text-base">
                     Loading...
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 4} className="text-center text-slate-500 py-16 text-base">
+                  <td colSpan={columns.length + (showTrend ? 4 : 3)} className="text-center text-slate-500 py-16 text-base">
                     {currentSeasonInfo && currentSeasonInfo.weeks_played === 0 ? (
                       <>
                         No {season} game data has been ingested yet.
@@ -554,9 +595,11 @@ export default function AnalyticsPage() {
                       )}
                     </td>
                     <td className="text-center px-4 py-3.5 text-slate-400 text-sm">{p.games_played}</td>
-                    <td className="text-center px-4 py-3.5">
-                      <Sparkline data={sparklines[p.player_id] ?? []} />
-                    </td>
+                    {showTrend && (
+                      <td className="text-center px-4 py-3.5">
+                        <Sparkline data={sparklines[p.player_id] ?? []} />
+                      </td>
+                    )}
                     {columns.map((col) => (
                       <td
                         key={col.key}
