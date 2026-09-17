@@ -7,6 +7,7 @@ from app.api.deps import DB
 from app.models.player import Player, PlayerDerivedStats, PlayerWeeklyStat
 from app.nfl_season import REGULAR_SEASON_WEEKS
 from app.schemas.player import PlayerDerivedStatsResponse
+from app.services import recent_form
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -164,6 +165,28 @@ async def get_sparklines(
             "games_played": gp,
         })
     return data
+
+
+@router.get("/recent-form")
+async def get_recent_form_endpoint(
+    db: DB,
+    player_ids: str = Query(..., description="Comma-separated player IDs"),
+    season: int = Query(..., description="Season the window ends in"),
+):
+    """Recent-form trend for a set of players: their team's last 8 games.
+
+    Unlike /sparklines, which draws one point per season, this is the
+    start-or-sit view -- recent game logs against the player's own baseline,
+    rolling back into the previous season when the current one is short. See
+    app.services.recent_form for why the window follows the team schedule.
+    """
+    try:
+        ids = [int(x.strip()) for x in player_ids.split(",") if x.strip()]
+    except ValueError:
+        return {}
+    if not ids or len(ids) > 200:
+        return {}
+    return await recent_form.get_recent_form(db, ids, season)
 
 
 @router.get("/seasons", response_model=list[int])

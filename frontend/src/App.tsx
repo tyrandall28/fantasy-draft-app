@@ -14,7 +14,7 @@ import AssistantPage from "./pages/AssistantPage";
 /** Standard pages get navbar + gray background */
 function DefaultLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#0f1117]">
+    <div className="min-h-screen bg-ink-900">
       <Navbar />
       {children}
     </div>

@@ -29,29 +29,29 @@ interface ScatterPoint {
 }
 
 const POSITION_COLORS: Record<string, string> = {
-  QB: "#38bdf8", // sky-400
-  RB: "#34d399", // emerald-400
-  WR: "#f59e0b", // amber-500
-  TE: "#a78bfa", // violet-400
-  K: "#fb7185",  // rose-400
+  QB: "#edeae3",
+  RB: "#edeae3",
+  WR: "#edeae3",
+  TE: "#edeae3",
+  K: "#edeae3",
 };
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ScatterPoint }> }) {
   if (!active || !payload?.[0]) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
       <p className="text-white font-medium text-sm">{d.name}</p>
-      <p className="text-slate-400 text-xs">{d.team} &middot; {d.gp} games</p>
+      <p className="text-chalk-mut text-xs">{d.team} &middot; {d.gp} games</p>
       <div className="mt-1.5 space-y-0.5">
-        <p className="text-slate-300 text-xs">
-          Median PPR: <span className="text-sky-300 font-mono">{d.x.toFixed(1)}</span>
+        <p className="text-chalk-dim text-xs">
+          Median PPR: <span className="text-chalk stat-num">{d.x.toFixed(1)}</span>
         </p>
-        <p className="text-slate-300 text-xs">
-          Std Dev: <span className="text-sky-300 font-mono">{d.y.toFixed(1)}</span>
+        <p className="text-chalk-dim text-xs">
+          Std Dev: <span className="text-chalk stat-num">{d.y.toFixed(1)}</span>
         </p>
-        <p className="text-slate-300 text-xs">
-          PPR/Game: <span className="text-sky-300 font-mono">{d.pprPerGame.toFixed(1)}</span>
+        <p className="text-chalk-dim text-xs">
+          PPR/Game: <span className="text-chalk stat-num">{d.pprPerGame.toFixed(1)}</span>
         </p>
       </div>
     </div>
@@ -95,7 +95,7 @@ export default function BoomBustChart({ data, position }: Props) {
       : sorted[mid].y;
   }, [scatterData]);
 
-  const color = POSITION_COLORS[position] || "#38bdf8";
+  const color = POSITION_COLORS[position] || "#edeae3";
 
   // Hide labels while dots are animating, then fade them in
   // We set the animation duration ourselves, so the timeout matches exactly
@@ -128,7 +128,7 @@ export default function BoomBustChart({ data, position }: Props) {
           <text
             x={cx + 8}
             y={cy + 3}
-            fill="#94a3b8"
+            fill="#9a968c"
             fontSize={9}
             fontFamily="system-ui, sans-serif"
             opacity={0}
@@ -143,7 +143,7 @@ export default function BoomBustChart({ data, position }: Props) {
 
   if (scatterData.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[450px] text-slate-500">
+      <div className="flex items-center justify-center h-[450px] text-chalk-mut">
         No boom/bust data available (requires players with 8+ games).
       </div>
     );
@@ -153,28 +153,28 @@ export default function BoomBustChart({ data, position }: Props) {
     <div>
       {/* Quadrant legend */}
       <div className="flex flex-wrap gap-x-6 gap-y-1 mb-4 px-2">
-        <span className="text-xs text-slate-500">
-          <span className="text-emerald-400 font-medium">Top-right:</span> Reliable Studs (high floor, consistent)
+        <span className="text-xs text-chalk-mut">
+          <span className="text-chalk-dim font-medium">Top-right:</span> Reliable Studs (high floor, consistent)
         </span>
-        <span className="text-xs text-slate-500">
-          <span className="text-amber-400 font-medium">Top-left:</span> Boom-or-Bust (high variance, lower floor)
+        <span className="text-xs text-chalk-mut">
+          <span className="text-chalk-dim font-medium">Top-left:</span> Boom-or-Bust (high variance, lower floor)
         </span>
-        <span className="text-xs text-slate-500">
-          <span className="text-sky-400 font-medium">Bottom-right:</span> Consistent &amp; Modest
+        <span className="text-xs text-chalk-mut">
+          <span className="text-chalk-dim font-medium">Bottom-right:</span> Consistent &amp; Modest
         </span>
-        <span className="text-xs text-slate-500">
-          <span className="text-slate-400 font-medium">Bottom-left:</span> Low upside
+        <span className="text-xs text-chalk-mut">
+          <span className="text-chalk-dim font-medium">Bottom-left:</span> Low upside
         </span>
       </div>
 
       <ResponsiveContainer width="100%" height={450}>
         <ScatterChart margin={{ top: 10, right: 30, bottom: 25, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(237,234,227,0.06)" />
           <XAxis
             type="number"
             dataKey="x"
             name="Median PPR"
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
+            tick={{ fill: "#9a968c", fontSize: 12 }}
             axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
             tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
           >
@@ -182,14 +182,14 @@ export default function BoomBustChart({ data, position }: Props) {
               value="Median Weekly PPR (Floor)"
               position="bottom"
               offset={10}
-              style={{ fill: "#64748b", fontSize: 13 }}
+              style={{ fill: "#6b6862", fontSize: 13 }}
             />
           </XAxis>
           <YAxis
             type="number"
             dataKey="y"
             name="Std Dev"
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
+            tick={{ fill: "#9a968c", fontSize: 12 }}
             axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
             tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
           >
@@ -198,7 +198,7 @@ export default function BoomBustChart({ data, position }: Props) {
               angle={-90}
               position="insideLeft"
               offset={5}
-              style={{ fill: "#64748b", fontSize: 13 }}
+              style={{ fill: "#6b6862", fontSize: 13 }}
             />
           </YAxis>
           <Tooltip content={<CustomTooltip />} cursor={false} />
@@ -206,12 +206,12 @@ export default function BoomBustChart({ data, position }: Props) {
           {/* Quadrant dividers */}
           <ReferenceLine
             x={medianX}
-            stroke="rgba(255,255,255,0.12)"
+            stroke="rgba(237,234,227,0.14)"
             strokeDasharray="6 4"
           />
           <ReferenceLine
             y={medianY}
-            stroke="rgba(255,255,255,0.12)"
+            stroke="rgba(237,234,227,0.14)"
             strokeDasharray="6 4"
           />
 
@@ -231,7 +231,7 @@ export default function BoomBustChart({ data, position }: Props) {
         </ScatterChart>
       </ResponsiveContainer>
 
-      <p className="text-xs text-slate-500 mt-2 px-2">
+      <p className="text-xs text-chalk-mut mt-2 px-2">
         {scatterData.length} players shown (min 8 games). Click a dot to view player details.
         Dashed lines mark the median of each axis, creating four quadrants.
       </p>

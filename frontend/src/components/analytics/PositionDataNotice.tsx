@@ -17,27 +17,27 @@ export default function PositionDataNotice({ notice, variant = "default" }: Prop
   const compact = variant === "compact";
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-lg border border-amber-400/20 bg-amber-400/5 ${
+      className={`flex items-start gap-2.5 rounded-lg border border-caution/20 bg-caution/5 ${
         compact ? "px-3 py-2.5" : "px-4 py-3"
       }`}
       role="note"
     >
       <span
         aria-hidden="true"
-        className={`flex-shrink-0 leading-5 text-amber-400 ${compact ? "text-xs" : "text-sm"}`}
+        className={`flex-shrink-0 leading-5 text-caution ${compact ? "text-xs" : "text-sm"}`}
       >
         ⓘ
       </span>
       <div className="min-w-0">
         <p
-          className={`font-medium text-amber-100 ${
+          className={`font-medium text-caution ${
             compact ? "text-xs leading-4" : "text-sm leading-5"
           }`}
         >
           {notice.title}
         </p>
         <p
-          className={`mt-1 text-amber-100/70 ${
+          className={`mt-1 text-chalk-dim ${
             compact ? "text-[11px] leading-4" : "text-sm leading-5"
           }`}
         >

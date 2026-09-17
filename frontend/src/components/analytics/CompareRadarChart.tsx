@@ -65,7 +65,9 @@ const RADAR_METRICS: Record<string, RadarMetric[]> = {
   ],
 };
 
-const PLAYER_COLORS = ["#38bdf8", "#f59e0b", "#a78bfa"]; // sky, amber, violet
+// Three series, so hue is real encoding here. Chosen clear of rise/fall so a
+// radar colour is never mistaken for a form signal.
+const PLAYER_COLORS = ["#edeae3", "#e0a33e", "#9b8ce0"];
 
 /** Compute percentile (0-100) of a value within a sorted ascending array */
 function percentileOf(sortedVals: number[], value: number): number {
@@ -100,7 +102,7 @@ function RadarTooltipContent({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
       <p className="text-white text-sm font-medium mb-1">{label}</p>
       {payload.map((entry) => (
         <p key={entry.name} className="text-xs" style={{ color: entry.color }}>
@@ -147,15 +149,15 @@ export default function CompareRadarChart({ allPlayers, selectedPlayers, positio
   return (
     <ResponsiveContainer width="100%" height={420}>
       <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
-        <PolarGrid stroke="rgba(255,255,255,0.08)" />
+        <PolarGrid stroke="rgba(237,234,227,0.09)" />
         <PolarAngleAxis
           dataKey="metric"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
+          tick={{ fill: "#9a968c", fontSize: 12 }}
         />
         <PolarRadiusAxis
           angle={90}
           domain={[0, 100]}
-          tick={{ fill: "#475569", fontSize: 9 }}
+          tick={{ fill: "#6b6862", fontSize: 9 }}
           tickFormatter={(v: number) => `${v}`}
           axisLine={false}
         />

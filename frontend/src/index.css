@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+/* Design tokens.
+ *
+ * The rule this palette is built on: colour means something. Chrome is
+ * monochrome graphite and chalk, and the only saturated pixels on the page are
+ * the ones carrying information -- form direction and small-sample warnings.
+ * Anything that needs emphasis without meaning (the active sort column, a
+ * selected tab) earns it through brightness and weight instead of hue.
+ *
+ * The greys are warm-neutral rather than blue-tinted. On the old blue-black,
+ * chalk text read as pale blue and the form green/red sat in a cool cast. */
+@theme {
+  --color-ink-900: #121211; /* page */
+  --color-ink-800: #1a1a18; /* table and card surfaces */
+  --color-ink-700: #232320; /* row hover, raised controls */
+  --color-ink-600: #2e2e2a; /* dividers, tier bands, borders */
+
+  --color-chalk: #edeae3; /* primary text -- bone, not pure white */
+  --color-chalk-dim: #9a968c; /* secondary text, unsorted numbers */
+  --color-chalk-mut: #6b6862; /* labels, rank numerals */
+
+  /* The product's signature. Interactive and active state only -- it never
+   * encodes data, so it sits far enough from rise/fall/caution in hue that it
+   * can't be misread as one. */
+  --color-accent: #4da3ff;
+  --color-accent-ink: #0d1520; /* text on a solid accent fill */
+
+  --color-rise: #5cc98d; /* form trending up */
+  --color-fall: #f0736b; /* form trending down */
+  --color-caution: #e0a33e; /* small sample, incomplete data */
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+}
+
+body {
+  background-color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Stat cells. Archivo's width axis buys roughly 15% horizontal room across
+ * eight numeric columns without reaching for a second typeface, and tabular
+ * figures keep the digits in vertical registers so a column scans as a shape.
+ * font-stretch (not font-variation-settings) so it doesn't clobber weight. */
+.stat-num {
+  font-stretch: 85%;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Names and anything that should stay full-width but still align in columns. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}

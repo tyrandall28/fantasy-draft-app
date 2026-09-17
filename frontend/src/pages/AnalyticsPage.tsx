@@ -4,18 +4,21 @@ import { usePlayerCard } from "../context/PlayerCardContext";
 import BoomBustChart from "../components/analytics/BoomBustChart";
 import CompareRadarChart from "../components/analytics/CompareRadarChart";
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
-import Sparkline from "../components/analytics/Sparkline";
+import FormSparkline from "../components/analytics/FormSparkline";
+import PlayerHeadshot from "../components/analytics/PlayerHeadshot";
 import PositionDataNotice from "../components/analytics/PositionDataNotice";
 import { hasFantasyPoints, positionNotice } from "../lib/positionData";
-import type { PlayerDerivedStats, SeasonInfo } from "../types";
+import { isTierSort, positionalRanks, tierBandAt } from "../lib/tiers";
+import type { PlayerDerivedStats, RecentFormData, SeasonInfo } from "../types";
 
-interface SparklinePoint {
-  season: number;
-  ppr_per_game: number | null;
-  games_played: number;
-}
-
-type SparklineData = Record<number, SparklinePoint[]>;
+const TREND_HELP =
+  "Recent form: PPR in the last 8 games this player's team played, rolling " +
+  "back into the previous season when the current one is shorter. Green or " +
+  "red means the window averages more than 12% above or below his own " +
+  "baseline (the ~17 team games before it). A red x is a game his team " +
+  "played and he did not; those are excluded from the average, not counted " +
+  "as zeros. The dashed line is his baseline. Week 18 is skipped -- playoff " +
+  "teams rest starters.";
 
 type ViewTab = "rankings" | "boom-bust" | "compare" | "target-air";
 
@@ -94,6 +97,19 @@ const DEFAULT_SORT_BY_POSITION: Record<string, SortField> = {
 
 const SMALL_SAMPLE_THRESHOLD = 8;
 
+// Brightness ramp for the sorted column: the top of the column reads as elite
+// and the tail recedes, so a glance at the grid tells you where the value sits
+// without reading the digits. Every metric in this table is higher-is-better,
+// so one mapping covers all of them.
+const CHALK_LOW = [107, 104, 98]; // --color-chalk-mut
+const CHALK_HIGH = [237, 234, 227]; // --color-chalk
+
+function heatColor(v: number, min: number, max: number): string {
+  const t = max > min ? (v - min) / (max - min) : 1;
+  const [r, g, b] = CHALK_LOW.map((lo, i) => Math.round(lo + (CHALK_HIGH[i] - lo) * t));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 export default function AnalyticsPage() {
   const [position, setPosition] = useState<string>("QB");
   const [season, setSeason] = useState<number>(2025);
@@ -105,8 +121,8 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<ViewTab>("rankings");
   const { openPlayerCard } = usePlayerCard();
   const cache = useRef<Map<CacheKey, PlayerDerivedStats[]>>(new Map());
-  const [sparklines, setSparklines] = useState<SparklineData>({});
-  const sparklineCache = useRef<Map<string, SparklineData>>(new Map());
+  const [forms, setForms] = useState<RecentFormData>({});
+  const formCache = useRef<Map<string, RecentFormData>>(new Map());
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareSearch, setCompareSearch] = useState("");
 
@@ -115,7 +131,7 @@ export default function AnalyticsPage() {
     [seasonInfo, season]
   );
   const activePositionNotice = positionNotice(position);
-  // The trend sparkline plots PPR/G, which is structurally zero for kickers
+  // The trend sparkline plots PPR, which is structurally zero for kickers
   // and defenses -- a flat line at the axis reads as a broken chart.
   const showTrend = hasFantasyPoints(position);
 
@@ -157,24 +173,28 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   }, [position, season]);
 
-  // Fetch sparkline data after rawData loads. Skipped entirely when the trend
-  // column is hidden, so the K tab doesn't request 100 flat-zero series.
+  // Fetch recent form after rawData loads. Skipped entirely when the trend
+  // column is hidden, so the K tab doesn't request 100 flat-zero series. The
+  // window ends in the selected season, so the trend can't run past the stats
+  // it sits beside.
   useEffect(() => {
-    if (rawData.length === 0 || !showTrend) return;
+    if (rawData.length === 0 || !showTrend || !season) return;
     const ids = rawData.map((p) => p.player_id);
-    const cacheKey = ids.sort().join(",");
-    const cached = sparklineCache.current.get(cacheKey);
+    const cacheKey = `${season}:${[...ids].sort((a, b) => a - b).join(",")}`;
+    const cached = formCache.current.get(cacheKey);
     if (cached) {
-      setSparklines(cached);
+      setForms(cached);
       return;
     }
-    apiFetch<SparklineData>(`/api/analytics/sparklines?player_ids=${ids.join(",")}`)
+    apiFetch<RecentFormData>(
+      `/api/analytics/recent-form?season=${season}&player_ids=${ids.join(",")}`
+    )
       .then((data) => {
-        sparklineCache.current.set(cacheKey, data);
-        setSparklines(data);
+        formCache.current.set(cacheKey, data);
+        setForms(data);
       })
-      .catch(() => setSparklines({}));
-  }, [rawData, showTrend]);
+      .catch(() => setForms({}));
+  }, [rawData, showTrend, season]);
 
   // Sort client-side
   const players = useMemo(() => {
@@ -213,6 +233,32 @@ export default function AnalyticsPage() {
   }, [position]);
 
   const columns = COLUMNS_BY_POSITION[position] || COLUMNS_BY_POSITION["QB"];
+  const columnCount = columns.length + (showTrend ? 2 : 1);
+
+  // Tier bands only claim to be tiers when the sort makes the top 12 a real
+  // one; otherwise they degrade to a plain row range. The rank badge beside
+  // each name is always the value-metric rank, so it stays true either way.
+  const isTier = isTierSort(position, sortBy, sortDir);
+  const ranks = useMemo(() => positionalRanks(rawData, position), [rawData, position]);
+
+  // Range of the sorted column, used for both the bar and the brightness ramp.
+  // `barMax` is null for metrics that can go negative (CPOE, EPA): a bar drawn
+  // from an arbitrary baseline reads as a magnitude it isn't. The ramp still
+  // applies there, since relative standing is meaningful either way.
+  const sortDomain = useMemo(() => {
+    const vals = players
+      .map((p) => p[sortBy] as number | null)
+      .filter((v): v is number => v != null);
+    if (vals.length === 0) return null;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    return { min, max, barMax: min < 0 || max <= 0 ? null : max };
+  }, [players, sortBy]);
+
+  // Early in a season every player is below the small-sample threshold, so
+  // flagging them all says nothing -- it just paints the page amber. The
+  // in-progress banner above the table already makes the point.
+  const seasonComplete = !currentSeasonInfo || currentSeasonInfo.is_complete;
 
   const handleSort = (key: SortField) => {
     if (sortBy === key) {
@@ -224,17 +270,17 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-[1600px] mx-auto px-6 py-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Analytics</h1>
-        <p className="text-slate-400 text-sm mt-1">
+        <h1 className="text-2xl font-semibold text-chalk">Analytics</h1>
+        <p className="text-chalk-mut text-sm mt-1">
           Position rankings and player metrics
         </p>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex bg-white/5 rounded-lg p-0.5">
+        <div className="flex bg-ink-800 border border-ink-600 rounded-lg p-0.5">
           {POSITIONS.map((pos) => {
             const notice = positionNotice(pos);
             return (
@@ -253,10 +299,10 @@ export default function AnalyticsPage() {
                 title={notice ? notice.title : undefined}
                 className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md ${
                   position === pos
-                    ? "bg-sky-500 text-white"
+                    ? "bg-accent text-accent-ink"
                     : notice
-                      ? "text-slate-600 hover:text-slate-400"
-                      : "text-slate-400 hover:text-white"
+                      ? "text-chalk-mut/60 hover:text-chalk-mut"
+                      : "text-chalk-mut hover:text-chalk-dim"
                 }`}
               >
                 {pos}
@@ -264,8 +310,8 @@ export default function AnalyticsPage() {
                   <span
                     className={`rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
                       position === pos
-                        ? "bg-white/20 text-white"
-                        : "bg-amber-400/10 text-amber-400/70"
+                        ? "bg-accent-ink/20 text-accent-ink"
+                        : "bg-caution/10 text-caution/70"
                     }`}
                   >
                     {notice.badge}
@@ -279,10 +325,10 @@ export default function AnalyticsPage() {
         <select
           value={season}
           onChange={(e) => setSeason(Number(e.target.value))}
-          className="bg-white/5 border border-white/10 text-white text-sm rounded-lg px-3 py-1.5"
+          className="bg-ink-800 border border-ink-600 text-chalk-dim text-sm rounded-lg px-3 py-1.5"
         >
           {seasonInfo.map((info) => (
-            <option key={info.season} value={info.season} className="bg-[#1a1d28]">
+            <option key={info.season} value={info.season} className="bg-ink-800">
               {info.season}
               {info.is_complete ? "" : " (in progress)"}
             </option>
@@ -290,7 +336,7 @@ export default function AnalyticsPage() {
         </select>
 
         {/* View tabs */}
-        <div className="flex bg-white/5 rounded-lg p-0.5 ml-auto">
+        <div className="flex bg-ink-800 border border-ink-600 rounded-lg p-0.5 ml-auto">
           {([
             { key: "rankings" as ViewTab, label: "Rankings" },
             { key: "boom-bust" as ViewTab, label: "Boom / Bust" },
@@ -304,8 +350,8 @@ export default function AnalyticsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-1.5 text-sm font-medium rounded-md ${
                 activeTab === tab.key
-                  ? "bg-sky-500 text-white"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-accent/15 text-accent"
+                  : "text-chalk-mut hover:text-chalk-dim"
               }`}
             >
               {tab.label}
@@ -326,10 +372,10 @@ export default function AnalyticsPage() {
           off a one- or two-game sample, so the leaderboard is mostly noise —
           say so rather than presenting it as settled. */}
       {currentSeasonInfo && !currentSeasonInfo.is_complete && currentSeasonInfo.weeks_played > 0 && (
-        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-          <span className="text-amber-400 text-sm leading-5">●</span>
-          <p className="text-sm text-amber-100/80 leading-5">
-            <span className="font-medium text-amber-100">
+        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-caution/20 bg-caution/5 px-4 py-3">
+          <span className="text-caution text-sm leading-5">●</span>
+          <p className="text-sm text-chalk-dim leading-5">
+            <span className="font-medium text-caution">
               {currentSeasonInfo.season} season in progress
             </span>{" "}
             — data through week {currentSeasonInfo.weeks_played} of{" "}
@@ -348,11 +394,11 @@ export default function AnalyticsPage() {
 
       {/* Boom/Bust Scatter Chart */}
       {activeTab === "boom-bust" && (
-        <div className="bg-[#12141b] border border-white/5 rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-white mb-1">
+        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-chalk mb-1">
             Boom / Bust — {position}s
           </h2>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-chalk-mut text-sm mb-4">
             Median weekly PPR (typical week) vs. standard deviation (how much it swings)
           </p>
           <BoomBustChart data={rawData} position={position} />
@@ -361,11 +407,11 @@ export default function AnalyticsPage() {
 
       {/* Compare Radar Chart */}
       {activeTab === "compare" && (
-        <div className="bg-[#12141b] border border-white/5 rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-white mb-1">
+        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-chalk mb-1">
             Player Comparison — {position}s
           </h2>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-chalk-mut text-sm mb-4">
             Compare 2–3 players side by side. Values shown as percentile rank within the position group.
           </p>
 
@@ -402,10 +448,10 @@ export default function AnalyticsPage() {
                   placeholder={compareIds.length === 0 ? "Search players to compare..." : "Add another player..."}
                   value={compareSearch}
                   onChange={(e) => setCompareSearch(e.target.value)}
-                  className="bg-white/5 border border-white/10 text-white text-sm rounded-lg px-3 py-1.5 w-64 placeholder:text-slate-500 focus:outline-none focus:border-sky-500/50"
+                  className="bg-ink-800 border border-ink-600 text-chalk text-sm rounded-lg px-3 py-1.5 w-64 placeholder:text-chalk-mut focus:outline-none focus:border-chalk-mut"
                 />
                 {compareSearchResults.length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-[#1a1d28] border border-white/10 rounded-lg shadow-xl z-10 overflow-hidden">
+                  <div className="absolute top-full left-0 mt-1 w-full bg-ink-700 border border-ink-600 rounded-lg shadow-xl z-10 overflow-hidden">
                     {compareSearchResults.map((p) => (
                       <button
                         key={p.player_id}
@@ -413,10 +459,10 @@ export default function AnalyticsPage() {
                           setCompareIds((ids) => [...ids, p.player_id]);
                           setCompareSearch("");
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
+                        className="w-full text-left px-3 py-2 text-sm text-chalk-dim hover:bg-ink-700 hover:text-chalk"
                       >
                         {p.full_name}
-                        <span className="text-slate-500 ml-2 text-xs">{p.nfl_team}</span>
+                        <span className="text-chalk-mut ml-2 text-xs">{p.nfl_team}</span>
                       </button>
                     ))}
                   </div>
@@ -427,7 +473,7 @@ export default function AnalyticsPage() {
 
           {/* Radar chart + stats table or prompt */}
           {comparePlayers.length < 2 ? (
-            <div className="flex items-center justify-center h-[400px] text-slate-500">
+            <div className="flex items-center justify-center h-[400px] text-chalk-mut">
               Select {comparePlayers.length === 0 ? "2–3" : "1 more"} player{comparePlayers.length === 0 ? "s" : ""} to compare
             </div>
           ) : (
@@ -445,8 +491,8 @@ export default function AnalyticsPage() {
               <div className="w-auto shrink-0 overflow-x-auto">
                 <table className="text-sm">
                   <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left text-slate-500 font-medium px-3 py-2 whitespace-nowrap">Stat</th>
+                    <tr className="border-b border-ink-600">
+                      <th className="text-left text-chalk-mut font-medium px-3 py-2 whitespace-nowrap">Stat</th>
                       {comparePlayers.map((p, i) => (
                         <th
                           key={p.player_id}
@@ -460,19 +506,19 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {/* Team row */}
-                    <tr className="border-b border-white/[0.04]">
-                      <td className="text-slate-500 px-3 py-1.5">Team</td>
+                    <tr className="border-b border-ink-600/50">
+                      <td className="text-chalk-mut px-3 py-1.5">Team</td>
                       {comparePlayers.map((p) => (
-                        <td key={p.player_id} className="text-right text-slate-300 px-3 py-1.5 font-mono">
+                        <td key={p.player_id} className="text-right text-chalk-dim px-3 py-1.5 stat-num">
                           {p.nfl_team}
                         </td>
                       ))}
                     </tr>
                     {/* Games played */}
-                    <tr className="border-b border-white/[0.04]">
-                      <td className="text-slate-500 px-3 py-1.5">GP</td>
+                    <tr className="border-b border-ink-600/50">
+                      <td className="text-chalk-mut px-3 py-1.5">GP</td>
                       {comparePlayers.map((p) => (
-                        <td key={p.player_id} className="text-right text-slate-300 px-3 py-1.5 font-mono">
+                        <td key={p.player_id} className="text-right text-chalk-dim px-3 py-1.5 stat-num">
                           {p.games_played}
                         </td>
                       ))}
@@ -485,16 +531,16 @@ export default function AnalyticsPage() {
                       const best = validVals.length > 0 ? Math.max(...validVals) : null;
 
                       return (
-                        <tr key={col.key} className="border-b border-white/[0.04]">
-                          <td className="text-slate-500 px-3 py-1.5 whitespace-nowrap">{col.label}</td>
+                        <tr key={col.key} className="border-b border-ink-600/50">
+                          <td className="text-chalk-mut px-3 py-1.5 whitespace-nowrap">{col.label}</td>
                           {comparePlayers.map((p) => {
                             const val = p[col.key] as number | null;
                             const isBest = val != null && best != null && val === best && validVals.length > 1;
                             return (
                               <td
                                 key={p.player_id}
-                                className={`text-right px-3 py-1.5 font-mono ${
-                                  isBest ? "text-emerald-400 font-semibold" : "text-slate-300"
+                                className={`text-right px-3 py-1.5 stat-num ${
+                                  isBest ? "text-accent font-semibold" : "text-chalk-dim"
                                 }`}
                               >
                                 {col.format ? col.format(val) : val != null ? String(val) : "-"}
@@ -514,11 +560,11 @@ export default function AnalyticsPage() {
 
       {/* Target Share vs Air Yards Chart */}
       {activeTab === "target-air" && (
-        <div className="bg-[#12141b] border border-white/5 rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-white mb-1">
+        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-chalk mb-1">
             Target Share vs Air Yards — {position}s
           </h2>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-chalk-mut text-sm mb-4">
             Volume (target share) vs. opportunity quality (air yards per game).
             Top-right = alpha receivers getting both volume and deep looks.
           </p>
@@ -528,48 +574,64 @@ export default function AnalyticsPage() {
 
       {/* Position Rankings Table */}
       {activeTab === "rankings" && (
-      <div className="bg-[#12141b] border border-white/5 rounded-xl overflow-hidden">
+      <div className="bg-ink-800 border border-ink-600 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full border-separate border-spacing-0">
             <thead>
-              <tr className="border-b border-white/5">
-                <th className="text-left text-slate-500 text-sm font-medium px-5 py-3.5 w-10">#</th>
-                <th className="text-left text-slate-500 text-sm font-medium px-5 py-3.5">Player</th>
-                <th className="text-center text-slate-500 text-sm font-medium px-4 py-3.5">GP</th>
+              <tr>
+                {/* Sticky with the identity cells below it, so the anchor
+                    survives horizontal scroll on a narrow window. */}
+                <th className="sticky left-0 z-20 bg-ink-800 text-left text-chalk-mut text-xs font-medium px-5 py-3 border-b border-ink-600">
+                  Player
+                </th>
                 {showTrend && (
-                  <th className="text-center text-slate-500 text-sm font-medium px-4 py-3.5">Trend</th>
-                )}
-                {columns.map((col) => (
                   <th
-                    key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    className="text-right text-slate-500 text-sm font-medium px-4 py-3.5 cursor-pointer hover:text-white select-none whitespace-nowrap"
+                    className="bg-ink-800 text-center text-chalk-mut text-xs font-medium px-4 py-3 border-b border-ink-600"
+                    title={TREND_HELP}
                   >
-                    {col.label}
-                    {sortBy === col.key && (
-                      <span className="text-sky-400 text-xs ml-1">
-                        {sortDir === "desc" ? "\u25BC" : "\u25B2"}
-                      </span>
-                    )}
+                    <span className="border-b border-dotted border-chalk-mut cursor-help">
+                      Form
+                    </span>
                   </th>
-                ))}
+                )}
+                {columns.map((col) => {
+                  const active = sortBy === col.key;
+                  return (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`bg-ink-800 text-right text-xs font-medium px-4 py-3 cursor-pointer select-none whitespace-nowrap border-b border-ink-600 transition-colors ${
+                        active ? "text-accent" : "text-chalk-mut hover:text-chalk-dim"
+                      }`}
+                    >
+                      {col.label}
+                      <span
+                        className={`ml-1 text-[9px] align-middle ${
+                          active ? "text-accent" : "text-transparent"
+                        }`}
+                      >
+                        {sortDir === "desc" ? "▼" : "▲"}
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {loading && players.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + (showTrend ? 4 : 3)} className="text-center text-slate-500 py-16 text-base">
+                  <td colSpan={columnCount} className="text-center text-chalk-mut py-16 text-base">
                     Loading...
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + (showTrend ? 4 : 3)} className="text-center text-slate-500 py-16 text-base">
+                  <td colSpan={columnCount} className="text-center text-chalk-dim py-16 text-base">
                     {currentSeasonInfo && currentSeasonInfo.weeks_played === 0 ? (
                       <>
                         No {season} game data has been ingested yet.
-                        <span className="block mt-1 text-sm text-slate-600">
-                          Run <code className="text-slate-400">python -m scripts.doctor</code> to
+                        <span className="block mt-1 text-sm text-chalk-mut">
+                          Run <code className="text-chalk-dim">python -m scripts.doctor</code> to
                           see what's loaded.
                         </span>
                       </>
@@ -579,41 +641,108 @@ export default function AnalyticsPage() {
                   </td>
                 </tr>
               ) : (
-                players.map((p, i) => (
-                  <tr key={p.player_id} className="border-b border-white/[0.03]">
-                    <td className="px-5 py-3.5 text-slate-500 text-sm">{i + 1}</td>
-                    <td className="px-5 py-3.5">
-                      <span
-                        onClick={() => openPlayerCard(p.player_id)}
-                        className="text-white text-[15px] font-medium cursor-pointer hover:text-sky-400"
-                      >
-                        {p.full_name}
-                      </span>
-                      <span className="text-slate-500 text-sm ml-2">{p.nfl_team}</span>
-                      {p.games_played < SMALL_SAMPLE_THRESHOLD && (
-                        <span className="text-amber-400/80 text-xs ml-1">({p.games_played}g)</span>
+                players.flatMap((p, i) => {
+                  const band = tierBandAt(i, position, isTier);
+                  const rank = ranks.get(p.player_id);
+                  const shortSample = seasonComplete && p.games_played < SMALL_SAMPLE_THRESHOLD;
+
+                  const rows = [];
+                  if (band) {
+                    rows.push(
+                      <tr key={`band-${i}`}>
+                        <td colSpan={columnCount} className="bg-ink-800 px-5 pt-6 pb-2">
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs font-semibold tracking-wide ${
+                              isTier ? "text-accent" : "text-chalk-dim"
+                            }`}>
+                              {band.label}
+                            </span>
+                            <span className="flex-1 h-px bg-ink-600" />
+                            <span className="text-chalk-mut text-[11px] tnum">
+                              {band.range}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  rows.push(
+                    <tr key={p.player_id} className="group">
+                      <td className="sticky left-0 z-10 bg-ink-800 group-hover:bg-ink-700 border-b border-ink-600/60 px-5 py-4 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="text-chalk-mut text-xs tnum w-6 shrink-0 text-right">
+                            {i + 1}
+                          </span>
+                          <PlayerHeadshot url={p.headshot_url} name={p.full_name} />
+                          <div className="min-w-0">
+                            <button
+                              onClick={() => openPlayerCard(p.player_id)}
+                              className="block text-chalk text-[15px] font-medium leading-tight hover:underline underline-offset-4 decoration-chalk-mut text-left"
+                            >
+                              {p.full_name}
+                            </button>
+                            <p className="text-chalk-mut text-xs mt-1 leading-none">
+                              {p.nfl_team}
+                              {rank != null && <> &middot; {position}{rank}</>}
+                              {" "}&middot;{" "}
+                              <span className={shortSample ? "text-caution" : undefined}>
+                                {p.games_played} gm
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {showTrend && (
+                        <td className="text-center px-4 py-4 border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors">
+                          <FormSparkline form={forms[p.player_id] ?? null} />
+                        </td>
                       )}
-                    </td>
-                    <td className="text-center px-4 py-3.5 text-slate-400 text-sm">{p.games_played}</td>
-                    {showTrend && (
-                      <td className="text-center px-4 py-3.5">
-                        <Sparkline data={sparklines[p.player_id] ?? []} />
-                      </td>
-                    )}
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={`text-right px-4 py-3.5 font-mono text-sm ${
-                          sortBy === col.key ? "text-sky-300" : "text-slate-300"
-                        }`}
-                      >
-                        {col.format
-                          ? col.format(p[col.key] as number | null)
-                          : p[col.key] != null ? String(p[col.key]) : "-"}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+
+                      {columns.map((col) => {
+                        const val = p[col.key] as number | null;
+                        const active = sortBy === col.key;
+                        const fill =
+                          active && sortDomain?.barMax != null && val != null
+                            ? Math.max(0, Math.min(1, val / sortDomain.barMax)) * 100
+                            : 0;
+                        // Only the sorted column ramps. Running it on all ten
+                        // would turn the grid into noise and stop the column
+                        // you're actually reading from standing out.
+                        const ramp =
+                          active && sortDomain && val != null
+                            ? heatColor(val, sortDomain.min, sortDomain.max)
+                            : undefined;
+                        return (
+                          <td
+                            key={col.key}
+                            className={`relative text-right px-4 py-4 stat-num text-sm border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors ${
+                              active ? "text-chalk" : "text-chalk-dim"
+                            }`}
+                          >
+                            {fill > 0 && (
+                              <span
+                                aria-hidden
+                                className="absolute inset-y-2 right-0 bg-accent/15 rounded-sm pointer-events-none"
+                                style={{ width: `${fill}%` }}
+                              />
+                            )}
+                            <span
+                              className={`relative ${active ? "font-medium" : ""}`}
+                              style={ramp ? { color: ramp } : undefined}
+                            >
+                              {col.format
+                                ? col.format(val)
+                                : val != null ? String(val) : "-"}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                  return rows;
+                })
               )}
             </tbody>
           </table>
@@ -625,10 +754,10 @@ export default function AnalyticsPage() {
           that's the injured guys; in week 1 it's everyone, and the notice above
           already covers it. */}
       {activeTab === "rankings" &&
-        !(currentSeasonInfo && !currentSeasonInfo.is_complete) &&
+        seasonComplete &&
         players.some((p) => p.games_played < SMALL_SAMPLE_THRESHOLD) && (
-          <p className="mt-3 text-xs text-slate-500">
-            <span className="text-amber-400/80">*</span> Players with fewer than {SMALL_SAMPLE_THRESHOLD} games — per-game rates may be inflated
+          <p className="mt-3 text-xs text-chalk-mut">
+            <span className="text-caution">*</span> Players with fewer than {SMALL_SAMPLE_THRESHOLD} games — per-game rates may be inflated
           </p>
         )}
     </div>

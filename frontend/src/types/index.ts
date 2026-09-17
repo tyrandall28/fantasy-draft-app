@@ -251,6 +251,26 @@ export interface SparklinePoint {
 
 export type SparklineData = Record<number, SparklinePoint[]>;
 
+/** One slot in the recent-form window -- a game the player's team played. */
+export interface FormPoint {
+  season: number;
+  week: number;
+  ppr: number | null;
+  status: "played" | "missed" | "inactive";
+}
+
+export interface RecentForm {
+  points: FormPoint[];
+  avg: number | null;
+  baseline: number | null;
+  games_played: number;
+  games_missed: number;
+  trend: "up" | "down" | "flat" | "unknown";
+  delta_pct: number | null;
+}
+
+export type RecentFormData = Record<number, RecentForm>;
+
 export interface DraftState {
   picks: DraftPick[];
   current_pick: number;

@@ -5,9 +5,9 @@ export default function Navbar() {
   const { user, logout } = useAuth();
 
   return (
-    <nav className="bg-[#12141b] border-b border-white/5 text-white px-6 py-3 flex items-center justify-between">
+    <nav className="bg-ink-800 border-b border-ink-600 text-chalk px-6 py-3 flex items-center justify-between">
       <Link to="/" className="text-xl font-extrabold tracking-tight">
-        Fantasy <span className="text-sky-400">Draft</span>
+        Fantasy <span className="text-chalk-dim">Draft</span>
       </Link>
       {user && (
         <div className="flex items-center gap-5">
