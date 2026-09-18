@@ -27,26 +27,31 @@ export function isPlayed(w: PlayerWeekly): boolean {
   return weekStatus(w) === "played";
 }
 
+/* Literal values rather than var(--...) because two of these are composed into
+ * rgba() fills. They track the tokens in index.css: --color-fall for a missed
+ * game, the warm chalk greys for everything else. They were slate-tinted, which
+ * put a cool cast on the one part of a chart that isn't chalk. */
+
 /** Band fills. Low alpha: these sit behind the line, they don't compete with it. */
 export const ABSENCE_FILL: Record<AbsentStatus, string> = {
-  missed: "rgba(248,113,113,0.10)",
-  bye: "rgba(148,163,184,0.07)",
+  missed: "rgba(240,115,107,0.10)", // --color-fall
+  bye: "rgba(154,150,140,0.07)", // --color-chalk-dim
   // He wasn't in the league yet -- the faintest thing that still reads as "not nothing".
-  inactive: "rgba(148,163,184,0.04)",
+  inactive: "rgba(154,150,140,0.04)",
 };
 
 /** Colour of the mark drawn at the top of a band, and of that week's axis label. */
 export const ABSENCE_MARK: Record<AbsentStatus, string> = {
-  missed: "#f87171",
-  bye: "#64748b",
-  inactive: "#475569",
+  missed: "#f0736b", // --color-fall
+  bye: "#6b6862", // --color-chalk-mut
+  inactive: "#4a4843",
 };
 
 /** Axis-label colour, dimmed for any week without a game. */
 export function weekTickFill(status: WeekStatus): string {
-  if (status === "played") return "#64748b";
-  if (status === "missed") return "#9f6b6b";
-  return "#475569";
+  if (status === "played") return "#6b6862";
+  if (status === "missed") return "#9c6a66"; // --color-fall, pulled back toward the greys
+  return "#4a4843";
 }
 
 export interface AbsenceRun {

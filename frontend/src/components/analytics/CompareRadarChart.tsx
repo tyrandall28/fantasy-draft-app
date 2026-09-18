@@ -66,8 +66,10 @@ const RADAR_METRICS: Record<string, RadarMetric[]> = {
 };
 
 // Three series, so hue is real encoding here. Chosen clear of rise/fall so a
-// radar colour is never mistaken for a form signal.
-const PLAYER_COLORS = ["#edeae3", "#e0a33e", "#9b8ce0"];
+// radar colour is never mistaken for a form signal. Exported because the pills
+// and the stats table that frame this chart have to name the same player in the
+// same colour -- they used to carry their own copy and drifted.
+export const PLAYER_COLORS = ["#edeae3", "#e0a33e", "#9b8ce0"];
 
 /** Compute percentile (0-100) of a value within a sorted ascending array */
 function percentileOf(sortedVals: number[], value: number): number {

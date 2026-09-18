@@ -54,3 +54,24 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/* A scroll container that doesn't announce itself.
+ *
+ * The platform scrollbar rendered a pale track down the inside edge of the
+ * player card, which squared off the rounded corner and read as a piece of
+ * chrome from another application. The thumb is transparent until you hover the
+ * container or actually scroll it, and the track never paints at all.
+ *
+ * Standard properties only, no ::-webkit-scrollbar rules: Chromium ignores the
+ * pseudo-elements entirely once scrollbar-width or scrollbar-color is set, so
+ * mixing the two approaches would leave one of them dead. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scroll-quiet:hover,
+.scroll-quiet:focus-within,
+.scroll-quiet.is-scrolling {
+  scrollbar-color: rgba(154, 150, 140, 0.35) transparent; /* --color-chalk-dim */
+}

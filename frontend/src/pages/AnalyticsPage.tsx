@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
 import { usePlayerCard } from "../context/PlayerCardContext";
 import BoomBustChart from "../components/analytics/BoomBustChart";
-import CompareRadarChart from "../components/analytics/CompareRadarChart";
+import CompareRadarChart, { PLAYER_COLORS } from "../components/analytics/CompareRadarChart";
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
 import FormSparkline from "../components/analytics/FormSparkline";
 import PlayerHeadshot from "../components/analytics/PlayerHeadshot";
@@ -350,7 +350,7 @@ export default function AnalyticsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-1.5 text-sm font-medium rounded-md ${
                 activeTab === tab.key
-                  ? "bg-accent/15 text-accent"
+                  ? "bg-accent text-accent-ink"
                   : "text-chalk-mut hover:text-chalk-dim"
               }`}
             >
@@ -424,9 +424,9 @@ export default function AnalyticsPage() {
                   key={p.player_id}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium"
                   style={{
-                    backgroundColor: ["#38bdf8", "#f59e0b", "#a78bfa"][i % 3] + "22",
-                    color: ["#38bdf8", "#f59e0b", "#a78bfa"][i % 3],
-                    border: `1px solid ${["#38bdf8", "#f59e0b", "#a78bfa"][i % 3]}44`,
+                    backgroundColor: PLAYER_COLORS[i % 3] + "22",
+                    color: PLAYER_COLORS[i % 3],
+                    border: `1px solid ${PLAYER_COLORS[i % 3]}44`,
                   }}
                 >
                   {p.full_name}
@@ -497,7 +497,7 @@ export default function AnalyticsPage() {
                         <th
                           key={p.player_id}
                           className="text-right font-medium px-3 py-2 whitespace-nowrap"
-                          style={{ color: ["#38bdf8", "#f59e0b", "#a78bfa"][i % 3] }}
+                          style={{ color: PLAYER_COLORS[i % 3] }}
                         >
                           {p.full_name.split(" ").pop()}
                         </th>

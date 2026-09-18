@@ -35,8 +35,6 @@ export interface TrendMetric {
   tickFormat?: (v: number) => string;
   /** Threshold for slope to count as rising/declining. Default 0.5. */
   slopeThreshold?: number;
-  /** Line color */
-  color?: string;
 }
 
 // ---------- Metric definitions ----------
@@ -57,7 +55,6 @@ const pprPoints: TrendMetric = {
   getValue: (w) => w.fantasy_points_ppr,
   format: (v) => v.toFixed(1),
   slopeThreshold: 0.3,
-  color: "#a78bfa", // violet
 };
 
 const targets: TrendMetric = {
@@ -66,7 +63,6 @@ const targets: TrendMetric = {
   getValue: (w) => w.targets,
   format: (v) => String(Math.round(v)),
   slopeThreshold: 0.15,
-  color: "#f59e0b", // amber
 };
 
 const targetShare: TrendMetric = {
@@ -77,7 +73,6 @@ const targetShare: TrendMetric = {
   domain: [0, 50],
   tickFormat: (v) => `${v}%`,
   slopeThreshold: 0.3,
-  color: "#fb7185", // rose
 };
 
 const rushYards: TrendMetric = {
@@ -86,7 +81,6 @@ const rushYards: TrendMetric = {
   getValue: (w) => w.rush_yards,
   format: (v) => String(Math.round(v)),
   slopeThreshold: 1,
-  color: "#34d399", // emerald
 };
 
 const recYards: TrendMetric = {
@@ -95,7 +89,6 @@ const recYards: TrendMetric = {
   getValue: (w) => w.rec_yards,
   format: (v) => String(Math.round(v)),
   slopeThreshold: 1,
-  color: "#38bdf8", // sky
 };
 
 const passYards: TrendMetric = {
@@ -104,7 +97,6 @@ const passYards: TrendMetric = {
   getValue: (w) => w.pass_yards,
   format: (v) => String(Math.round(v)),
   slopeThreshold: 3,
-  color: "#f87171", // red
 };
 
 const receptions: TrendMetric = {
@@ -113,7 +105,6 @@ const receptions: TrendMetric = {
   getValue: (w) => w.receptions,
   format: (v) => String(Math.round(v)),
   slopeThreshold: 0.1,
-  color: "#22d3ee", // cyan
 };
 
 /** Get available metrics for a position */
@@ -156,19 +147,19 @@ function ChartTooltip({ active, label, slots, metric }: {
   if (!d) return null;
 
   return (
-    <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white text-sm font-medium">
+    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-chalk text-sm font-medium">
         Week {d.week}
         {d.status === "bye" ? "" : ` vs ${d.opponent}`}
       </p>
       {d.value != null ? (
-        <p className="text-slate-300 text-xs mt-1">
-          {metric.label}: <span className="text-sky-300 font-mono">{metric.format(d.value)}</span>
+        <p className="text-chalk-dim text-xs mt-1">
+          {metric.label}: <span className="text-chalk stat-num">{metric.format(d.value)}</span>
         </p>
       ) : (
         <p
           className="text-xs mt-1"
-          style={{ color: d.status === "missed" ? ABSENCE_MARK.missed : "#94a3b8" }}
+          style={{ color: d.status === "missed" ? ABSENCE_MARK.missed : "var(--color-chalk-dim)" }}
         >
           {ABSENCE_LABEL[d.status === "played" ? "missed" : d.status]}
         </p>
@@ -230,10 +221,10 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
     const avg = sumY / n;
     const threshold = metric?.slopeThreshold ?? 0.5;
 
-    let color = "#64748b";
+    let color = "var(--color-chalk-mut)";
     let label = "Flat";
-    if (slope > threshold) { color = "#34d399"; label = "Rising"; }
-    if (slope < -threshold) { color = "#f87171"; label = "Declining"; }
+    if (slope > threshold) { color = "var(--color-rise)"; label = "Rising"; }
+    if (slope < -threshold) { color = "var(--color-fall)"; label = "Declining"; }
 
     return {
       color,
@@ -247,10 +238,14 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
   }, [played, metric]);
 
   if (!metric || metrics.length === 0) return null;
-  const lineColor = metric.color ?? "#38bdf8";
+  // Accent, not a per-metric hue: there is only ever one series on this chart,
+  // so the colour isn't encoding a category -- it's marking the thing you came
+  // to look at. The rising/declining overlay stays on rise/fall, which is what
+  // actually carries meaning here.
+  const lineColor = "var(--color-accent)";
 
   return (
-    <div className="mb-3">
+    <div className="mb-4">
       {/* Metric tabs */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex gap-1 flex-wrap">
@@ -258,10 +253,10 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
             <button
               key={m.key}
               onClick={() => setActiveMetric(m.key)}
-              className={`text-[11px] px-2 py-0.5 rounded transition-colors ${
+              className={`text-xs px-2.5 py-1 rounded transition-colors ${
                 activeMetric === m.key
-                  ? "bg-sky-600 text-white"
-                  : "bg-white/5 text-slate-400 hover:bg-white/10"
+                  ? "bg-accent text-accent-ink"
+                  : "bg-ink-700 text-chalk-mut hover:text-chalk-dim"
               }`}
             >
               {m.label}
@@ -270,8 +265,8 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
         </div>
         {trend && (
           <div className="flex items-center gap-2 shrink-0 ml-2">
-            <span className="text-[11px] text-slate-500">Avg: {metric.format(trend.avg)}</span>
-            <span className="text-[11px] font-medium" style={{ color: trend.color }}>
+            <span className="text-xs text-chalk-mut stat-num">Avg: {metric.format(trend.avg)}</span>
+            <span className="text-xs font-medium" style={{ color: trend.color }}>
               {trend.label}
             </span>
           </div>
@@ -279,17 +274,17 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
       </div>
 
       {played.length < 2 ? (
-        <div className="flex items-center justify-center h-[120px] text-xs text-slate-500">
+        <div className="flex items-center justify-center h-[180px] text-sm text-chalk-mut">
           Not enough data for {metric.label} trend
         </div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: -15 }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -10 }}>
               {/* Behind everything: the weeks he wasn't on the field. */}
               {absenceBands(runs)}
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(237,234,227,0.05)" />
               <XAxis
                 dataKey="week"
                 type="number"
@@ -297,13 +292,13 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
                 ticks={weekTicks}
                 allowDecimals={false}
                 tick={weekTick(statusByWeek)}
-                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                axisLine={{ stroke: "var(--color-ink-600)" }}
                 tickLine={false}
               />
               <YAxis
                 domain={metric.domain ?? ["auto", "auto"]}
-                tick={{ fill: "#64748b", fontSize: 10 }}
-                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                tick={{ fill: "var(--color-chalk-mut)", fontSize: 11 }}
+                axisLine={{ stroke: "var(--color-ink-600)" }}
                 tickLine={false}
                 tickFormatter={metric.tickFormat}
               />
@@ -315,7 +310,7 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
               {trend && (
                 <ReferenceLine
                   y={trend.avg}
-                  stroke="rgba(255,255,255,0.1)"
+                  stroke="rgba(237,234,227,0.12)"
                   strokeDasharray="4 4"
                 />
               )}
@@ -324,9 +319,9 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
                 type="monotone"
                 dataKey="value"
                 stroke={lineColor}
-                strokeWidth={2}
-                dot={{ r: 3, fill: lineColor, strokeWidth: 0 }}
-                activeDot={{ r: 5, fill: lineColor, strokeWidth: 0 }}
+                strokeWidth={2.5}
+                dot={{ r: 3.5, fill: lineColor, strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: lineColor, strokeWidth: 0 }}
                 connectNulls={false}
                 animationDuration={400}
               />
@@ -346,7 +341,7 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
           </ResponsiveContainer>
 
           {counts.missed > 0 && (
-            <p className="text-[10px] text-slate-500 mt-1">
+            <p className="text-xs text-chalk-mut mt-2">
               Played {counts.played} of {counts.teamGames} team games —{" "}
               <span style={{ color: ABSENCE_MARK.missed }}>
                 {counts.missed} missed

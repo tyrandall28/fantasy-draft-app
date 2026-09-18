@@ -51,7 +51,7 @@ function renderAbsenceMarks(run: AbsenceRun, viewBox?: ViewBox) {
               x={cx}
               y={cy + 3}
               fill={color}
-              fontSize={8.5}
+              fontSize={9.5}
               textAnchor="middle"
               letterSpacing="0.05em"
             >
@@ -106,7 +106,7 @@ export function weekTick(statusByWeek: Map<number, WeekStatus>) {
         y={y}
         dy={10}
         fill={weekTickFill(statusByWeek.get(week) ?? "played")}
-        fontSize={10}
+        fontSize={11}
         textAnchor="middle"
       >
         {week}
