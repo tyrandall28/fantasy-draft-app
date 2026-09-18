@@ -104,8 +104,8 @@ function RadarTooltipContent({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white text-sm font-medium mb-1">{label}</p>
+    <div className="panel-raised px-3 py-2 shadow-xl">
+      <p className="text-chalk text-sm font-medium mb-1">{label}</p>
       {payload.map((entry) => (
         <p key={entry.name} className="text-xs" style={{ color: entry.color }}>
           {entry.name}: <span className="font-mono">{entry.value}th</span>
@@ -177,7 +177,7 @@ export default function CompareRadarChart({ allPlayers, selectedPlayers, positio
           />
         ))}
         <Legend
-          wrapperStyle={{ fontSize: 13, color: "#e2e8f0" }}
+          wrapperStyle={{ fontSize: 13, color: "#edeae3" }}
         />
       </RadarChart>
     </ResponsiveContainer>

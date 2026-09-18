@@ -11,22 +11,22 @@ export default function Navbar() {
       </Link>
       {user && (
         <div className="flex items-center gap-5">
-          <Link to="/" className="text-sm text-slate-300 hover:text-white transition-colors">
+          <Link to="/" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
             Dashboard
           </Link>
-          <Link to="/rankings" className="text-sm text-slate-300 hover:text-white transition-colors">
+          <Link to="/rankings" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
             Rankings
           </Link>
-          <Link to="/analytics" className="text-sm text-slate-300 hover:text-white transition-colors">
+          <Link to="/analytics" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
             Analytics
           </Link>
-          <Link to="/assistant" className="text-sm text-slate-300 hover:text-white transition-colors">
+          <Link to="/assistant" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
             Ask AI
           </Link>
-          <span className="text-slate-500 text-sm">{user.username}</span>
+          <span className="text-chalk-mut text-sm">{user.username}</span>
           <button
             onClick={logout}
-            className="text-sm bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 px-3 py-1 rounded-lg transition-colors"
+            className="text-sm bg-ink-700 border border-ink-600 hover:bg-ink-600 text-chalk-dim px-3 py-1 rounded-lg transition-colors"
           >
             Logout
           </button>

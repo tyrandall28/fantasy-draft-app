@@ -68,10 +68,10 @@ export default function RankingList({ ranking, onReorder, onToggleLock, comparis
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <div className="p-4 border-b border-ink-700 flex items-center justify-between flex-shrink-0">
         <div>
-          <h2 className="font-bold text-white">{ranking.name}</h2>
-          <p className="text-xs text-slate-500">
+          <h2 className="font-bold text-chalk">{ranking.name}</h2>
+          <p className="text-xs text-chalk-mut">
             {entries.length} players &middot; {ranking.source}
           </p>
         </div>
@@ -80,12 +80,12 @@ export default function RankingList({ ranking, onReorder, onToggleLock, comparis
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter players..."
-          className="bg-[#12141b] border border-white/10 rounded-lg px-3 py-1.5 text-sm w-48 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50"
+          className="panel px-3 py-1.5 text-sm w-48 text-chalk-dim placeholder:text-chalk-mut focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50"
         />
       </div>
 
       {/* Header row */}
-      <div className={`grid gap-2 px-4 py-2 text-xs font-semibold text-slate-500 border-b border-white/5 flex-shrink-0 ${hasComparison ? "grid-cols-13" : "grid-cols-12"}`} style={hasComparison ? { gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr 1fr 2fr" } : { gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr 2fr" }}>
+      <div className={`grid gap-2 px-4 py-2 text-xs font-semibold text-chalk-mut border-b border-ink-700 flex-shrink-0 ${hasComparison ? "grid-cols-13" : "grid-cols-12"}`} style={hasComparison ? { gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr 1fr 2fr" } : { gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr 2fr" }}>
         <div>Rank</div>
         <div>Player</div>
         <div>Position</div>

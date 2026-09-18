@@ -35,8 +35,8 @@ export default function SinglePlayerView({
       />
 
       {/* Compare hint */}
-      <div className="pt-2 border-t border-white/5">
-        <p className="text-xs text-slate-500 text-center italic">
+      <div className="pt-2 border-t border-ink-700">
+        <p className="text-xs text-chalk-mut text-center italic">
           Click another player in your rankings to compare head-to-head.
         </p>
       </div>

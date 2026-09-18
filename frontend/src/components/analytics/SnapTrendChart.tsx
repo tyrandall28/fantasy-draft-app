@@ -44,24 +44,24 @@ function CustomTooltip({ active, label, slots }: {
   if (!d) return null;
 
   return (
-    <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white text-sm font-medium">
+    <div className="panel-raised px-3 py-2 shadow-xl">
+      <p className="text-chalk text-sm font-medium">
         Week {d.week}
         {d.status === "bye" ? "" : ` vs ${d.opponent}`}
       </p>
       {d.snapPct != null ? (
         <div className="mt-1 space-y-0.5">
-          <p className="text-slate-300 text-xs">
-            Snap%: <span className="text-sky-300 font-mono">{d.snapPct.toFixed(1)}%</span>
+          <p className="text-chalk-dim text-xs">
+            Snap%: <span className="text-accent font-mono">{d.snapPct.toFixed(1)}%</span>
           </p>
-          <p className="text-slate-300 text-xs">
-            PPR: <span className="text-sky-300 font-mono">{(d.ppr ?? 0).toFixed(1)}</span>
+          <p className="text-chalk-dim text-xs">
+            PPR: <span className="text-accent font-mono">{(d.ppr ?? 0).toFixed(1)}</span>
           </p>
         </div>
       ) : (
         <p
           className="text-xs mt-1"
-          style={{ color: d.status === "missed" ? ABSENCE_MARK.missed : "#94a3b8" }}
+          style={{ color: d.status === "missed" ? ABSENCE_MARK.missed : "#9a968c" }}
         >
           {ABSENCE_LABEL[d.status === "played" ? "missed" : d.status]}
         </p>
@@ -109,10 +109,10 @@ export default function SnapTrendChart({ weeks }: Props) {
     const avgPct = sumY / n;
 
     // Trend direction: > 0.5 per week = rising, < -0.5 = falling
-    let color = "#64748b"; // gray (flat)
+    let color = "#6b6862"; // gray (flat)
     let label = "Flat";
-    if (slope > 0.5) { color = "#34d399"; label = "Rising"; }    // emerald
-    if (slope < -0.5) { color = "#f87171"; label = "Declining"; } // red
+    if (slope > 0.5) { color = "#5cc98d"; label = "Rising"; }    // emerald
+    if (slope < -0.5) { color = "#f0736b"; label = "Declining"; } // red
 
     return {
       slope,
@@ -132,10 +132,10 @@ export default function SnapTrendChart({ weeks }: Props) {
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Snap % Trend</h3>
+        <h3 className="text-xs font-medium text-chalk-dim uppercase tracking-wide">Snap % Trend</h3>
         {trend && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Avg: {trend.avgPct}%</span>
+            <span className="text-xs text-chalk-mut">Avg: {trend.avgPct}%</span>
             <span className="text-xs font-medium" style={{ color: trend.color }}>
               {trend.label}
             </span>
@@ -160,7 +160,7 @@ export default function SnapTrendChart({ weeks }: Props) {
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: "#64748b", fontSize: 10 }}
+            tick={{ fill: "#6b6862", fontSize: 10 }}
             axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
             tickLine={false}
             tickFormatter={(v: number) => `${v}%`}
@@ -180,10 +180,10 @@ export default function SnapTrendChart({ weeks }: Props) {
           <Line
             type="monotone"
             dataKey="snapPct"
-            stroke="#38bdf8"
+            stroke="#4da3ff"
             strokeWidth={2}
-            dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: "#38bdf8", strokeWidth: 0 }}
+            dot={{ r: 3, fill: "#4da3ff", strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: "#4da3ff", strokeWidth: 0 }}
             connectNulls={false}
             animationDuration={400}
           />

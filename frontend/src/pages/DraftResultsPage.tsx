@@ -29,34 +29,34 @@ export default function DraftResultsPage() {
   if (loading) {
     return (
       <div className="flex justify-center p-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
       </div>
     );
   }
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Draft Results</h1>
+      <h1 className="text-2xl font-semibold text-chalk mb-6">Draft Results</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(rosters).map(([userId, players]) => (
-          <div key={userId} className="bg-white rounded-lg shadow">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Team {userId.slice(0, 8)}</h3>
-              <p className="text-xs text-gray-500">{players.length} players</p>
+          <div key={userId} className="panel">
+            <div className="p-4 border-b border-ink-600">
+              <h3 className="font-semibold text-chalk">Team {userId.slice(0, 8)}</h3>
+              <p className="text-xs text-chalk-mut">{players.length} players</p>
             </div>
             <div>
               {players.map((p) => (
                 <div
                   key={p.overall_pick}
-                  className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-50 text-sm"
+                  className="flex items-center gap-2 px-4 py-1.5 border-b border-ink-700 text-sm"
                 >
-                  <span className="text-gray-400 text-xs w-6">R{p.round_num}</span>
-                  <span className="font-medium text-xs text-gray-600 w-8">{p.position}</span>
+                  <span className="text-chalk-mut text-xs w-6 stat-num">R{p.round_num}</span>
+                  <span className="font-medium text-xs text-chalk-mut w-8">{p.position}</span>
                   <span
-                    className="text-gray-900 cursor-pointer hover:text-sky-600 transition-colors"
+                    className="text-chalk cursor-pointer hover:text-accent transition-colors"
                     onClick={() => openPlayerCard(p.player_id)}
                   >{p.full_name}</span>
-                  <span className="text-gray-400 text-xs ml-auto">{p.nfl_team}</span>
+                  <span className="text-chalk-dim text-xs ml-auto">{p.nfl_team}</span>
                 </div>
               ))}
             </div>

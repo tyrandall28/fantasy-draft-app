@@ -114,7 +114,7 @@ export default function RankingsPage() {
   if (loading) {
     return (
       <div className="flex justify-center p-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
       </div>
     );
   }
@@ -122,9 +122,9 @@ export default function RankingsPage() {
   return (
     <div className="h-[calc(100vh-52px)] flex overflow-hidden">
       {/* Left sidebar: user's rankings + create */}
-      <div className="w-60 flex-shrink-0 border-r border-white/5 bg-[#12141b] flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-white/5 flex-shrink-0">
-          <h2 className="font-bold text-white text-sm mb-3">My Rankings</h2>
+      <div className="w-60 flex-shrink-0 border-r border-ink-700 bg-ink-800 flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-ink-700 flex-shrink-0">
+          <h2 className="font-bold text-chalk text-sm mb-3">My Rankings</h2>
           <SourceSelector
             sources={sources}
             onCreate={createRanking}
@@ -135,24 +135,24 @@ export default function RankingsPage() {
           {rankings.map((r) => (
             <div
               key={r.id}
-              className={`px-3 py-2.5 border-b border-white/5 cursor-pointer transition-colors ${
+              className={`px-3 py-2.5 border-b border-ink-700 cursor-pointer transition-colors ${
                 activeRanking?.id === r.id
-                  ? "bg-sky-500/10 border-l-2 border-l-sky-500"
-                  : "hover:bg-white/[0.03] border-l-2 border-l-transparent"
+                  ? "bg-accent/10 border-l-2 border-l-accent"
+                  : "hover:bg-ink-700 border-l-2 border-l-transparent"
               }`}
               onClick={() => loadRanking(r.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="font-medium text-slate-200 text-sm truncate">{r.name}</p>
-                  <p className="text-xs text-slate-500">{r.source}</p>
+                  <p className="font-medium text-chalk-dim text-sm truncate">{r.name}</p>
+                  <p className="text-xs text-chalk-mut">{r.source}</p>
                 </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteRanking(r.id);
                   }}
-                  className="text-red-400/40 hover:text-red-400 text-xs transition-colors flex-shrink-0 ml-2"
+                  className="text-fall/40 hover:text-fall text-xs transition-colors flex-shrink-0 ml-2"
                 >
                   Delete
                 </button>
@@ -160,7 +160,7 @@ export default function RankingsPage() {
             </div>
           ))}
           {rankings.length === 0 && (
-            <p className="text-slate-600 text-sm text-center py-6">
+            <p className="text-chalk-mut text-sm text-center py-6">
               No rankings yet.
             </p>
           )}
@@ -171,7 +171,7 @@ export default function RankingsPage() {
       {activeRanking ? (
         <div className="flex-1 flex overflow-hidden">
           {/* Left half: user's custom ranking list */}
-          <div className="flex-1 flex flex-col overflow-hidden border-r border-white/5">
+          <div className="flex-1 flex flex-col overflow-hidden border-r border-ink-700">
             <RankingList
               ranking={activeRanking}
               onReorder={handleReorder}
@@ -184,15 +184,15 @@ export default function RankingsPage() {
 
           {/* Right half: contextual analytics OR source comparison */}
           {sources.length > 0 && (
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#12141b] relative">
+            <div className="flex-1 flex flex-col overflow-hidden bg-ink-800 relative">
               {/* Mode toggle — floats at top-right of the panel header area */}
-              <div className="absolute top-3 right-4 z-10 flex bg-white/5 rounded-lg p-0.5">
+              <div className="absolute top-3 right-4 z-10 flex bg-ink-700 rounded-lg p-0.5">
                 <button
                   onClick={() => setRightPanelMode("analytics")}
                   className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                     rightPanelMode === "analytics"
-                      ? "bg-sky-500 text-white"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-accent text-accent-ink"
+                      : "text-chalk-dim hover:text-chalk"
                   }`}
                 >
                   Analytics
@@ -201,8 +201,8 @@ export default function RankingsPage() {
                   onClick={() => setRightPanelMode("source")}
                   className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                     rightPanelMode === "source"
-                      ? "bg-sky-500 text-white"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-accent text-accent-ink"
+                      : "text-chalk-dim hover:text-chalk"
                   }`}
                 >
                   Source
@@ -232,8 +232,8 @@ export default function RankingsPage() {
       ) : (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-slate-500 text-sm">Select or create a ranking to get started.</p>
-            <p className="text-slate-600 text-xs mt-2">Your custom list will appear here side-by-side with a source list for comparison.</p>
+            <p className="text-chalk-mut text-sm">Select or create a ranking to get started.</p>
+            <p className="text-chalk-mut text-xs mt-2">Your custom list will appear here side-by-side with a source list for comparison.</p>
           </div>
         </div>
       )}

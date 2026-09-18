@@ -5,17 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { usePlayerCard } from "../context/PlayerCardContext";
 import type { League, UserRanking, UserRankingDetail } from "../types";
 import BottomPanel from "../components/draft/BottomPanel";
+import { positionBadge } from "../lib/positionColors";
 
-const POS_BADGE: Record<string, string> = {
-  QB: "bg-red-500/20 text-red-400",
-  RB: "bg-emerald-500/20 text-emerald-400",
-  WR: "bg-sky-500/20 text-sky-400",
-  TE: "bg-amber-500/20 text-amber-400",
-  FLEX: "bg-orange-500/20 text-orange-400",
-  K: "bg-purple-500/20 text-purple-400",
-  DST: "bg-slate-500/20 text-slate-400",
-  BN: "bg-gray-500/20 text-gray-400",
-};
 
 const POSITION_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "K", "DST", "BN"];
 
@@ -132,14 +123,14 @@ export default function LobbyPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-[#0f1117]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
+      <div className="flex justify-center items-center min-h-screen bg-ink-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
       </div>
     );
   }
 
   if (!league) {
-    return <div className="min-h-screen bg-[#0f1117] text-red-400 p-6">{error || "League not found"}</div>;
+    return <div className="min-h-screen bg-ink-900 text-fall p-6">{error || "League not found"}</div>;
   }
 
   const teamCount = league.team_count;
@@ -201,32 +192,32 @@ export default function LobbyPage() {
   ) || [];
 
   return (
-    <div className="h-screen bg-[#0f1117] text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-ink-900 text-chalk flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="bg-[#12141b] border-b border-white/5 px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <div className="bg-ink-800 border-b border-ink-700 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="text-slate-400 hover:text-slate-200 transition-colors"
+            className="text-chalk-dim hover:text-chalk-dim transition-colors"
             title="Back to Dashboard"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>
           </Link>
-          <h1 className="text-lg font-bold text-white">{league.name}</h1>
-          <span className="text-xs text-slate-400">
+          <h1 className="text-lg font-bold text-chalk">{league.name}</h1>
+          <span className="text-xs text-chalk-dim">
             {league.scoring_type.toUpperCase()} &middot; {teamCount} teams ({league.members.length} joined) &middot; {league.roster_size} rounds &middot; {league.pick_time_seconds === 0 ? "No timer" : league.pick_time_seconds >= 120 ? `${league.pick_time_seconds / 60}min/pick` : `${league.pick_time_seconds}s/pick`}
           </span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <code className="bg-white/5 px-2 py-1 rounded text-xs font-mono text-slate-300 border border-white/10">
+            <code className="bg-ink-700 px-2 py-1 rounded text-xs font-mono text-chalk-dim border border-ink-600">
               {league.invite_code}
             </code>
             <button
               onClick={handleCopyInvite}
-              className="bg-sky-600 text-white px-2.5 py-1 rounded text-xs font-medium hover:bg-sky-500 transition-colors"
+              className="btn-primary px-2.5 py-1 text-xs"
             >
               {copied ? "Copied!" : "Copy"}
             </button>
@@ -235,7 +226,7 @@ export default function LobbyPage() {
             <button
               onClick={handleStartDraft}
               disabled={starting}
-              className="bg-green-600 text-white px-5 py-1.5 rounded-lg text-sm font-bold hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="bg-rise text-chalk px-5 py-1.5 rounded-lg text-sm font-bold hover:bg-rise disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {starting ? "Starting..." : "Start Draft"}
             </button>
@@ -243,20 +234,20 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      {error && <div className="bg-red-500/10 text-red-400 px-4 py-2 text-sm border-b border-red-500/20">{error}</div>}
+      {error && <div className="bg-fall/10 text-fall px-4 py-2 text-sm border-b border-fall/20">{error}</div>}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top: 3-column area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar: Rankings */}
-        <div className="w-72 flex-shrink-0 bg-[#12141b] border-r border-white/5 flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-white/5">
-            <h3 className="font-semibold text-slate-200 text-sm mb-2">My Rankings</h3>
+        <div className="w-72 flex-shrink-0 bg-ink-800 border-r border-ink-700 flex flex-col overflow-hidden">
+          <div className="p-3 border-b border-ink-700">
+            <h3 className="font-semibold text-chalk-dim text-sm mb-2">My Rankings</h3>
             <select
               value={selectedRankingId}
               onChange={(e) => setSelectedRankingId(e.target.value)}
-              className="w-full bg-[#1a1d26] border border-white/10 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-sky-500"
+              className="w-full bg-ink-700 border border-ink-600 rounded px-2 py-1.5 text-sm text-chalk-dim focus:outline-none focus:border-accent"
             >
               <option value="">Select a ranking list...</option>
               {rankings.map((r) => (
@@ -266,7 +257,7 @@ export default function LobbyPage() {
               ))}
             </select>
             {rankings.length === 0 && (
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-chalk-mut mt-2">
                 No rankings yet. Create one from the Rankings page.
               </p>
             )}
@@ -274,13 +265,13 @@ export default function LobbyPage() {
 
           {rankingDetail && (
             <>
-              <div className="p-3 border-b border-white/5">
+              <div className="p-3 border-b border-ink-700">
                 <input
                   type="text"
                   value={rankingSearch}
                   onChange={(e) => setRankingSearch(e.target.value)}
                   placeholder="Search players..."
-                  className="w-full bg-[#1a1d26] border border-white/10 rounded px-2 py-1 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 mb-2"
+                  className="w-full bg-ink-700 border border-ink-600 rounded px-2 py-1 text-sm text-chalk-dim placeholder:text-chalk-mut focus:outline-none focus:border-accent mb-2"
                 />
                 <div className="flex gap-1 flex-wrap">
                   {["", "QB", "RB", "WR", "TE", "K", "DST"].map((pos) => (
@@ -289,8 +280,8 @@ export default function LobbyPage() {
                       onClick={() => setRankingPosFilter(pos)}
                       className={`text-xs px-2 py-0.5 rounded transition-colors ${
                         rankingPosFilter === pos
-                          ? "bg-sky-600 text-white"
-                          : "bg-white/5 text-slate-400 hover:bg-white/10"
+                          ? "bg-accent text-accent-ink"
+                          : "bg-ink-700 text-chalk-dim hover:bg-ink-600"
                       }`}
                     >
                       {pos || "All"}
@@ -302,18 +293,18 @@ export default function LobbyPage() {
                 {filteredEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5 hover:bg-white/5 transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 border-b border-ink-700 hover:bg-ink-700 transition-colors"
                   >
-                    <span className="text-[10px] text-slate-500 w-5 text-right font-mono">{entry.rank}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${POS_BADGE[entry.player.position] ?? "bg-slate-500/20 text-slate-400"}`}>
+                    <span className="text-[10px] text-chalk-mut w-5 text-right font-mono">{entry.rank}</span>
+                    <span className={`badge-sm ${positionBadge(entry.player.position)}`}>
                       {entry.player.position}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p
-                        className="text-xs font-medium text-slate-200 truncate cursor-pointer hover:text-sky-400 transition-colors"
+                        className="text-xs font-medium text-chalk-dim truncate cursor-pointer hover:text-accent transition-colors"
                         onClick={() => openPlayerCard(entry.player_id)}
                       >{entry.player.full_name}</p>
-                      <p className="text-[10px] text-slate-500">{entry.player.nfl_team}</p>
+                      <p className="text-[10px] text-chalk-mut">{entry.player.nfl_team}</p>
                     </div>
                   </div>
                 ))}
@@ -324,7 +315,7 @@ export default function LobbyPage() {
 
         {/* Center: Draft Board */}
         <div className="flex-1 overflow-hidden p-3">
-          <div className="bg-[#1a1d26] rounded-xl overflow-hidden h-full flex flex-col">
+          <div className="bg-ink-700 rounded-xl overflow-hidden h-full flex flex-col">
             <div className="overflow-auto flex-1">
               <table className="w-full border-collapse text-xs table-fixed" style={{ minWidth: `${Math.max(columns.length * 120, 600)}px` }}>
                 <colgroup>
@@ -334,8 +325,8 @@ export default function LobbyPage() {
                   ))}
                 </colgroup>
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-[#12141b]">
-                    <th className="py-2.5 px-2 text-slate-500 font-medium text-center sticky left-0 bg-[#12141b] z-20">
+                  <tr className="bg-ink-800">
+                    <th className="py-2.5 px-2 text-chalk-mut font-medium text-center sticky left-0 bg-ink-800 z-20">
                       RD
                     </th>
                     {positionSlots.map((slot) => {
@@ -347,7 +338,7 @@ export default function LobbyPage() {
                         <th
                           key={slot.position}
                           className={`py-2.5 px-1 font-semibold text-center ${
-                            isMe ? "text-sky-400" : isBot ? "text-amber-400" : isEmpty ? "text-slate-600" : "text-slate-300"
+                            isMe ? "text-accent" : isBot ? "text-caution" : isEmpty ? "text-chalk-mut" : "text-chalk-dim"
                           }`}
                         >
                           {canClaim ? (
@@ -355,9 +346,9 @@ export default function LobbyPage() {
                               onClick={() => handleClaimPosition(slot.position)}
                               className={`truncate w-full rounded px-1 py-0.5 transition-colors ${
                                 isEmpty
-                                  ? "hover:bg-sky-500/10 hover:text-sky-400 text-slate-600"
+                                  ? "hover:brightness-110/10 hover:text-accent text-chalk-mut"
                                   : isMe
-                                    ? "hover:bg-red-500/10 text-sky-400"
+                                    ? "hover:bg-fall/10 text-accent"
                                     : ""
                               }`}
                               title={isEmpty ? `Claim position ${slot.position}` : isMe ? "Release position" : ""}
@@ -379,11 +370,11 @@ export default function LobbyPage() {
                   {Array.from({ length: rounds }, (_, roundIdx) => {
                     const roundNum = roundIdx + 1;
                     const isEven = roundNum % 2 === 0;
-                    const rowBg = roundNum % 2 === 0 ? "#1e2130" : "#1a1d26";
+                    const rowBg = roundNum % 2 === 0 ? "#232320" : "#232320";
 
                     return (
                       <tr key={roundNum} style={{ backgroundColor: rowBg }}>
-                        <td className="py-0 px-2 text-slate-500 text-center font-mono font-medium sticky left-0 z-10" style={{ backgroundColor: rowBg }}>
+                        <td className="py-0 px-2 text-chalk-mut text-center font-mono font-medium sticky left-0 z-10" style={{ backgroundColor: rowBg }}>
                           {roundNum}
                         </td>
                         {columns.map((col, colIdx) => {
@@ -396,11 +387,11 @@ export default function LobbyPage() {
                               <div
                                 className={`rounded-md h-[56px] flex flex-col items-start justify-center px-2.5 border-l-[3px] ${
                                   isMyCol
-                                    ? "border-l-sky-900/50 bg-sky-500/5"
-                                    : "border-l-transparent bg-white/[0.03]"
+                                    ? "border-l-accent/40 bg-accent/5"
+                                    : "border-l-transparent bg-ink-700"
                                 }`}
                               >
-                                <span className="text-[10px] font-mono text-slate-600">{overall}</span>
+                                <span className="text-[10px] font-mono text-chalk-mut">{overall}</span>
                               </div>
                             </td>
                           );
@@ -415,16 +406,16 @@ export default function LobbyPage() {
         </div>
 
         {/* Right sidebar: Members */}
-        <div className="w-56 flex-shrink-0 bg-[#12141b] border-l border-white/5 flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-white/5 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-200 text-sm">
+        <div className="w-56 flex-shrink-0 bg-ink-800 border-l border-ink-700 flex flex-col overflow-hidden">
+          <div className="p-3 border-b border-ink-700 flex items-center justify-between">
+            <h3 className="font-semibold text-chalk-dim text-sm">
               Members ({league.members.length}/{teamCount})
             </h3>
             {league.status === "setup" && user?.id === league.commissioner_id && league.members.length < teamCount && (
               <button
                 onClick={handleAddBot}
                 disabled={addingBot}
-                className="text-[10px] font-medium bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+                className="text-[10px] font-medium bg-rise/15 text-rise px-2 py-0.5 rounded hover:bg-rise/25 transition-colors disabled:opacity-50"
               >
                 {addingBot ? "..." : "+ CPU"}
               </button>
@@ -438,27 +429,27 @@ export default function LobbyPage() {
                   key={m.user_id}
                   className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
                     m.user_id === user?.id
-                      ? "bg-sky-500/10"
+                      ? "bg-accent/10"
                       : m.is_bot
-                        ? "bg-amber-500/5"
-                        : "bg-white/[0.03]"
+                        ? "bg-caution/5"
+                        : "bg-ink-700"
                   }`}
                 >
                   {m.draft_position != null && (
-                    <span className="bg-sky-500/20 text-sky-400 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0">
+                    <span className="bg-accent/20 text-accent text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0">
                       {m.draft_position}
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-200 text-xs truncate flex items-center gap-1">
+                    <p className="font-medium text-chalk-dim text-xs truncate flex items-center gap-1">
                       {m.team_name}
                       {m.is_bot && (
-                        <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded font-semibold">
+                        <span className="text-[9px] bg-caution/20 text-caution px-1 py-0.5 rounded font-semibold">
                           CPU
                         </span>
                       )}
                     </p>
-                    <p className="text-[10px] text-slate-500 truncate">
+                    <p className="text-[10px] text-chalk-mut truncate">
                       {m.is_bot ? "Computer" : m.username}
                       {m.user_id === league.commissioner_id && " (Comm.)"}
                     </p>
@@ -466,7 +457,7 @@ export default function LobbyPage() {
                   {m.is_bot && league.status === "setup" && user?.id === league.commissioner_id && (
                     <button
                       onClick={() => handleRemoveBot(m.user_id)}
-                      className="text-red-400/40 hover:text-red-400 text-xs transition-colors flex-shrink-0"
+                      className="text-fall/40 hover:text-fall text-xs transition-colors flex-shrink-0"
                       title="Remove CPU"
                     >
                       ✕
@@ -477,15 +468,15 @@ export default function LobbyPage() {
           </div>
 
           {/* League Settings */}
-          <div className="p-3 border-t border-white/5 overflow-y-auto">
-            <h4 className="font-medium text-slate-400 text-[10px] uppercase tracking-wider mb-2">
+          <div className="p-3 border-t border-ink-700 overflow-y-auto">
+            <h4 className="font-medium text-chalk-dim text-[10px] uppercase tracking-wider mb-2">
               League Settings
-              {!isCommissioner && <span className="text-slate-600 normal-case tracking-normal ml-1">(view only)</span>}
+              {!isCommissioner && <span className="text-chalk-mut normal-case tracking-normal ml-1">(view only)</span>}
             </h4>
             <div className="space-y-2.5 text-[10px]">
               {/* League Name */}
               <div>
-                <label className="text-slate-500 block mb-1">League Name</label>
+                <label className="text-chalk-mut block mb-1">League Name</label>
                 {isCommissioner && league.status === "setup" ? (
                   <input
                     type="text"
@@ -497,39 +488,39 @@ export default function LobbyPage() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
-                    className="w-full bg-[#1a1d26] border border-white/10 rounded px-1.5 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-ink-700 border border-ink-600 rounded px-1.5 py-1 text-[10px] text-chalk-dim focus:outline-none focus:border-accent"
                   />
                 ) : (
-                  <p className="text-slate-300">{league.name}</p>
+                  <p className="text-chalk-dim">{league.name}</p>
                 )}
               </div>
 
               {/* Team Count */}
               <div>
-                <label className="text-slate-500 block mb-1">Teams</label>
+                <label className="text-chalk-mut block mb-1">Teams</label>
                 {isCommissioner && league.status === "setup" ? (
                   <select
                     value={league.team_count}
                     onChange={(e) => updateSetting({ team_count: Number(e.target.value) })}
-                    className="w-full bg-[#1a1d26] border border-white/10 rounded px-1.5 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-ink-700 border border-ink-600 rounded px-1.5 py-1 text-[10px] text-chalk-dim focus:outline-none focus:border-accent"
                   >
                     {[6, 8, 10, 12, 14].map((n) => (
                       <option key={n} value={n}>{n} Teams</option>
                     ))}
                   </select>
                 ) : (
-                  <p className="text-slate-300">{league.team_count} Teams</p>
+                  <p className="text-chalk-dim">{league.team_count} Teams</p>
                 )}
               </div>
 
               {/* Pick Timer */}
               <div>
-                <label className="text-slate-500 block mb-1">Pick Timer</label>
+                <label className="text-chalk-mut block mb-1">Pick Timer</label>
                 {isCommissioner && league.status === "setup" ? (
                   <select
                     value={league.pick_time_seconds}
                     onChange={(e) => updateSetting({ pick_time_seconds: Number(e.target.value) })}
-                    className="w-full bg-[#1a1d26] border border-white/10 rounded px-1.5 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-ink-700 border border-ink-600 rounded px-1.5 py-1 text-[10px] text-chalk-dim focus:outline-none focus:border-accent"
                   >
                     <option value={30}>30 seconds</option>
                     <option value={60}>60 seconds</option>
@@ -539,65 +530,65 @@ export default function LobbyPage() {
                     <option value={0}>No timer</option>
                   </select>
                 ) : (
-                  <p className="text-slate-300">{league.pick_time_seconds === 0 ? "No timer" : `${league.pick_time_seconds}s`}</p>
+                  <p className="text-chalk-dim">{league.pick_time_seconds === 0 ? "No timer" : `${league.pick_time_seconds}s`}</p>
                 )}
               </div>
 
               {/* Position Slots */}
               <div>
-                <label className="text-slate-500 block mb-1">Roster Slots</label>
+                <label className="text-chalk-mut block mb-1">Roster Slots</label>
                 <div className="space-y-1">
                   {POSITION_ORDER.map((pos) => {
                     const count = league.position_slots[pos] ?? 0;
                     return (
                       <div key={pos} className="flex items-center justify-between">
-                        <span className={`font-bold px-1.5 py-0.5 rounded ${POS_BADGE[pos] ?? "bg-slate-500/20 text-slate-400"}`}>
+                        <span className={`font-bold px-1.5 py-0.5 rounded ${positionBadge(pos)}`}>
                           {pos}
                         </span>
                         {isCommissioner && league.status === "setup" ? (
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => updatePositionSlot(pos, Math.max(0, count - 1))}
-                              className="w-5 h-5 rounded bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors text-xs font-bold"
+                              className="w-5 h-5 rounded bg-ink-700 text-chalk-dim hover:bg-ink-600 hover:text-chalk flex items-center justify-center transition-colors text-xs font-bold"
                             >
                               −
                             </button>
-                            <span className="text-slate-200 w-4 text-center font-mono">{count}</span>
+                            <span className="text-chalk-dim w-4 text-center font-mono">{count}</span>
                             <button
                               onClick={() => updatePositionSlot(pos, count + 1)}
-                              className="w-5 h-5 rounded bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors text-xs font-bold"
+                              className="w-5 h-5 rounded bg-ink-700 text-chalk-dim hover:bg-ink-600 hover:text-chalk flex items-center justify-center transition-colors text-xs font-bold"
                             >
                               +
                             </button>
                           </div>
                         ) : (
-                          <span className="text-slate-300 font-mono">{count}</span>
+                          <span className="text-chalk-dim font-mono">{count}</span>
                         )}
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-white/5">
-                  <span className="text-slate-400 font-medium">Draft Rounds</span>
-                  <span className="text-slate-200 font-mono font-bold">{Object.values(league.position_slots).reduce((a: number, b: unknown) => a + (b as number), 0)}</span>
+                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-ink-700">
+                  <span className="text-chalk-dim font-medium">Draft Rounds</span>
+                  <span className="text-chalk-dim font-mono font-bold">{Object.values(league.position_slots).reduce((a: number, b: unknown) => a + (b as number), 0)}</span>
                 </div>
               </div>
 
               {/* CPU Ranking Source */}
               {league.members.some((m) => m.is_bot) && (
                 <div>
-                  <label className="text-slate-500 block mb-1">CPU Ranking Source</label>
+                  <label className="text-chalk-mut block mb-1">CPU Ranking Source</label>
                   {isCommissioner && league.status === "setup" ? (
                     <select
                       value={league.bot_ranking_source}
                       onChange={(e) => updateSetting({ bot_ranking_source: e.target.value })}
-                      className="w-full bg-[#1a1d26] border border-white/10 rounded px-1.5 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-sky-500"
+                      className="w-full bg-ink-700 border border-ink-600 rounded px-1.5 py-1 text-[10px] text-chalk-dim focus:outline-none focus:border-accent"
                     >
                       <option value="espn_ppr">ESPN PPR</option>
                       <option value="sleeper_ppr">Sleeper PPR ADP</option>
                     </select>
                   ) : (
-                    <p className="text-slate-300">{league.bot_ranking_source === "espn_ppr" ? "ESPN PPR" : "Sleeper PPR ADP"}</p>
+                    <p className="text-chalk-dim">{league.bot_ranking_source === "espn_ppr" ? "ESPN PPR" : "Sleeper PPR ADP"}</p>
                   )}
                 </div>
               )}

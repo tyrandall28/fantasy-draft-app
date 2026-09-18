@@ -14,11 +14,11 @@ export default function CurrentPickBanner({ state, isMyTurn }: Props) {
   const pickInRound = ((state.current_pick - 1) % state.team_count) + 1;
 
   return (
-    <div className={`px-4 py-1.5 rounded-lg ${isMyTurn ? "bg-green-500/15 border border-green-500/30" : "bg-white/5"}`}>
-      <p className="text-sm font-medium text-slate-200">
+    <div className={`px-4 py-1.5 rounded-lg ${isMyTurn ? "bg-rise/15 border border-rise/30" : "bg-ink-700"}`}>
+      <p className="text-sm font-medium text-chalk-dim">
         Round {roundNum}, Pick {pickInRound} (#{state.current_pick} overall)
       </p>
-      <p className={`text-xs ${isMyTurn ? "text-green-400 font-bold" : "text-slate-500"}`}>
+      <p className={`text-xs ${isMyTurn ? "text-rise font-bold" : "text-chalk-mut"}`}>
         {isMyTurn ? "Your pick!" : `Waiting for ${currentPicker ?? "..."}`}
       </p>
     </div>

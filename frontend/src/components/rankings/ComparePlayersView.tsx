@@ -8,7 +8,7 @@ import type {
   UserRankingEntry,
 } from "../../types";
 
-const PLAYER_TEXT_COLORS = ["#38bdf8", "#f59e0b"]; // matches CompareRadarChart and H2H chart
+const PLAYER_TEXT_COLORS = ["#4da3ff", "#e0a33e"]; // matches CompareRadarChart and H2H chart
 
 const fmt1 = (v: number | null) => (v != null ? v.toFixed(1) : "-");
 const fmt2 = (v: number | null) => (v != null ? v.toFixed(2) : "-");
@@ -102,10 +102,10 @@ export default function ComparePlayersView({ players, loading }: Props) {
     <div className="flex-1 overflow-y-auto p-4 space-y-5">
       {/* Head-to-Head weekly overlay chart — works for ANY two players */}
       <div>
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+        <h4 className="text-xs font-semibold text-chalk-dim uppercase tracking-wide mb-2">
           Head-to-Head Weekly
         </h4>
-        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3">
+        <div className="panel-inset p-3">
           <HeadToHeadWeeklyChart
             weeksA={a.weekly}
             weeksB={b.weekly}
@@ -118,10 +118,10 @@ export default function ComparePlayersView({ players, loading }: Props) {
       {/* Radar chart (same position only) */}
       {canShowRadar && (
         <div>
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+          <h4 className="text-xs font-semibold text-chalk-dim uppercase tracking-wide mb-2">
             Percentile Comparison
           </h4>
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2">
+          <div className="panel-inset p-2">
             <CompareRadarChart
               allPlayers={a.positionGroup}
               selectedPlayers={[a.stats!, b.stats!]}
@@ -133,8 +133,8 @@ export default function ComparePlayersView({ players, loading }: Props) {
 
       {/* Cross-position note */}
       {!samePosition && (
-        <div className="bg-amber-500/5 border border-amber-500/15 rounded-lg p-3">
-          <p className="text-xs text-amber-300">
+        <div className="bg-caution/5 border border-caution/15 rounded-lg p-3">
+          <p className="text-xs text-caution">
             Comparing across positions ({a.entry.player.position} vs {b.entry.player.position}).
             Radar uses same-position percentiles; the head-to-head chart above and shared metrics below work across positions.
           </p>
@@ -144,13 +144,13 @@ export default function ComparePlayersView({ players, loading }: Props) {
       {/* Side-by-side stats table */}
       {(a.stats || b.stats) && (
         <div>
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+          <h4 className="text-xs font-semibold text-chalk-dim uppercase tracking-wide mb-2">
             Stat Comparison {!samePosition && "(Shared Metrics)"}
           </h4>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left text-slate-500 text-xs font-medium px-2 py-2">Stat</th>
+              <tr className="border-b border-ink-600">
+                <th className="text-left text-chalk-mut text-xs font-medium px-2 py-2">Stat</th>
                 {players.map((p, i) => (
                   <th
                     key={p.entry.player.id}
@@ -163,18 +163,18 @@ export default function ComparePlayersView({ players, loading }: Props) {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-white/[0.04]">
-                <td className="text-slate-500 px-2 py-1.5 text-xs">Team</td>
+              <tr className="border-b border-ink-700">
+                <td className="text-chalk-mut px-2 py-1.5 text-xs">Team</td>
                 {players.map((p) => (
-                  <td key={p.entry.player.id} className="text-right text-slate-300 px-2 py-1.5 font-mono text-xs">
+                  <td key={p.entry.player.id} className="text-right text-chalk-dim px-2 py-1.5 font-mono text-xs">
                     {p.entry.player.nfl_team}
                   </td>
                 ))}
               </tr>
-              <tr className="border-b border-white/[0.04]">
-                <td className="text-slate-500 px-2 py-1.5 text-xs">GP</td>
+              <tr className="border-b border-ink-700">
+                <td className="text-chalk-mut px-2 py-1.5 text-xs">GP</td>
                 {players.map((p) => (
-                  <td key={p.entry.player.id} className="text-right text-slate-300 px-2 py-1.5 font-mono text-xs">
+                  <td key={p.entry.player.id} className="text-right text-chalk-dim px-2 py-1.5 font-mono text-xs">
                     {p.stats?.games_played ?? "-"}
                   </td>
                 ))}
@@ -184,15 +184,15 @@ export default function ComparePlayersView({ players, loading }: Props) {
                 const validVals = vals.filter((v): v is number => v != null);
                 const best = validVals.length > 0 ? Math.max(...validVals) : null;
                 return (
-                  <tr key={row.key} className="border-b border-white/[0.04]">
-                    <td className="text-slate-500 px-2 py-1.5 text-xs whitespace-nowrap">{row.label}</td>
+                  <tr key={row.key} className="border-b border-ink-700">
+                    <td className="text-chalk-mut px-2 py-1.5 text-xs whitespace-nowrap">{row.label}</td>
                     {vals.map((val, i) => {
                       const isBest = val != null && best != null && val === best && validVals.length > 1;
                       return (
                         <td
                           key={i}
                           className={`text-right px-2 py-1.5 font-mono text-xs ${
-                            isBest ? "text-emerald-400 font-semibold" : "text-slate-300"
+                            isBest ? "text-rise font-semibold" : "text-chalk-dim"
                           }`}
                         >
                           {row.format(val)}
@@ -208,8 +208,8 @@ export default function ComparePlayersView({ players, loading }: Props) {
       )}
 
       {/* Two full analytics columns side by side */}
-      <div className="pt-4 border-t border-white/5">
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+      <div className="pt-4 border-t border-ink-700">
+        <h4 className="text-xs font-semibold text-chalk-dim uppercase tracking-wide mb-3">
           Full Breakdown
         </h4>
         <div className="grid grid-cols-2 gap-4">

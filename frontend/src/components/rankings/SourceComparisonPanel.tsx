@@ -2,15 +2,8 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
 import { usePlayerCard } from "../../context/PlayerCardContext";
 import type { BaseRankingEntry, UserRankingEntry } from "../../types";
+import { positionBadge } from "../../lib/positionColors";
 
-const POS_COLORS: Record<string, string> = {
-  QB: "bg-red-500/20 text-red-400",
-  RB: "bg-emerald-500/20 text-emerald-400",
-  WR: "bg-sky-500/20 text-sky-400",
-  TE: "bg-amber-500/20 text-amber-400",
-  K: "bg-purple-500/20 text-purple-400",
-  DST: "bg-slate-500/20 text-slate-400",
-};
 
 interface RankingSource {
   value: string;
@@ -78,27 +71,27 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
   return (
     <div className="flex flex-col h-full">
       {/* Title bar — matches RankingList header height (p-4) */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <div className="p-4 border-b border-ink-700 flex items-center justify-between flex-shrink-0">
         <div>
-          <h2 className="font-bold text-white flex items-center gap-2">
+          <h2 className="font-bold text-chalk flex items-center gap-2">
             Source Comparison
             <button
               onClick={() => setShowAnalysis(!showAnalysis)}
               className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${
                 showAnalysis
-                  ? "bg-sky-600 text-white"
-                  : "bg-sky-500/15 text-sky-400 hover:bg-sky-500/25"
+                  ? "bg-accent text-accent-ink"
+                  : "bg-accent/15 text-accent hover:brightness-110/25"
               }`}
             >
               {showAnalysis ? "Show List" : "Analysis"}
             </button>
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-chalk-mut">
             {baseEntries.length} players &middot;{" "}
             <select
               value={selectedSource}
               onChange={(e) => setSelectedSource(e.target.value)}
-              className="bg-transparent border-none text-xs text-slate-500 focus:outline-none cursor-pointer hover:text-slate-300 p-0"
+              className="bg-transparent border-none text-xs text-chalk-mut focus:outline-none cursor-pointer hover:text-chalk-dim p-0"
             >
               {sources.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -113,13 +106,13 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter players..."
-          className="bg-[#12141b] border border-white/10 rounded-lg px-3 py-1.5 text-sm w-48 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50"
+          className="panel px-3 py-1.5 text-sm w-48 text-chalk-dim placeholder:text-chalk-mut focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50"
         />
       </div>
 
       {/* Column header row — matches RankingList header row */}
       <div
-        className="grid gap-2 px-4 py-2 text-xs font-semibold text-slate-500 border-b border-white/5 flex-shrink-0"
+        className="grid gap-2 px-4 py-2 text-xs font-semibold text-chalk-mut border-b border-ink-700 flex-shrink-0"
         style={{ gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr" }}
       >
         <div>Rank</div>
@@ -132,7 +125,7 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
       {/* Content */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent" />
         </div>
       ) : showAnalysis ? (
         <AnalysisView risers={risers} fallers={fallers} sourceName={sources.find((s) => s.value === selectedSource)?.label || selectedSource} onPlayerClick={openPlayerCard} />
@@ -141,27 +134,27 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
           {filteredBase.map((entry) => (
               <div
                 key={entry.id}
-                className="grid gap-2 px-4 py-2 border-b border-white/5 items-center text-sm min-h-[40px] hover:bg-white/[0.03]"
+                className="grid gap-2 px-4 py-2 border-b border-ink-700 items-center text-sm min-h-[40px] hover:bg-ink-700"
                 style={{ gridTemplateColumns: "1fr 4fr 2fr 2fr 1fr" }}
               >
-                <div className="text-slate-500 font-mono text-xs">
+                <div className="text-chalk-mut font-mono text-xs">
                   {entry.rank}
                 </div>
                 <div
-                  className="font-medium text-slate-200 truncate min-w-0 cursor-pointer hover:text-sky-400 transition-colors"
+                  className="font-medium text-chalk-dim truncate min-w-0 cursor-pointer hover:text-accent transition-colors"
                   onClick={() => openPlayerCard(entry.player.id)}
                 >
                   {entry.player.full_name}
                 </div>
                 <div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${POS_COLORS[entry.player.position] ?? ""}`}>
+                  <span className={`badge ${positionBadge(entry.player.position)}`}>
                     {entry.player.position}
                   </span>
                 </div>
-                <div className="text-slate-500 text-xs">
+                <div className="text-chalk-mut text-xs">
                   {entry.player.nfl_team}
                 </div>
-                <div className="text-slate-600 text-xs">
+                <div className="text-chalk-mut text-xs">
                   {entry.player.bye_week}
                 </div>
               </div>
@@ -187,37 +180,37 @@ function AnalysisView({
     <div className="flex-1 overflow-y-auto p-3 space-y-4">
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-400">{risers.length}</p>
-          <p className="text-xs text-emerald-500">Ranked Higher</p>
+        <div className="bg-rise/10 border border-rise/20 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-rise">{risers.length}</p>
+          <p className="text-xs text-rise">Ranked Higher</p>
         </div>
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-red-400">{fallers.length}</p>
-          <p className="text-xs text-red-500">Ranked Lower</p>
+        <div className="bg-fall/10 border border-fall/20 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-fall">{fallers.length}</p>
+          <p className="text-xs text-fall">Ranked Lower</p>
         </div>
       </div>
 
-      <p className="text-xs text-slate-500 text-center">
+      <p className="text-xs text-chalk-mut text-center">
         Compared to {sourceName}
       </p>
 
       {/* Biggest risers */}
       {risers.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-emerald-400 mb-2 uppercase tracking-wide">
+          <h4 className="text-xs font-semibold text-rise mb-2 uppercase tracking-wide">
             Biggest Risers (you rank higher)
           </h4>
           <div className="space-y-1">
             {risers.slice(0, 15).map((d) => (
-              <div key={`${d.player.full_name}-${d.userRank}`} className="flex items-center gap-2 px-2 py-1.5 rounded bg-emerald-500/5 text-sm">
-                <span className="text-emerald-400 font-mono font-bold w-10 text-right flex-shrink-0 text-xs">
+              <div key={`${d.player.full_name}-${d.userRank}`} className="flex items-center gap-2 px-2 py-1.5 rounded bg-rise/5 text-sm">
+                <span className="text-rise font-mono font-bold w-10 text-right flex-shrink-0 text-xs">
                   +{d.diff}
                 </span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${POS_COLORS[d.player.position] ?? ""}`}>
+                <span className={`badge flex-shrink-0 ${positionBadge(d.player.position)}`}>
                   {d.player.position}
                 </span>
-                <span className="text-slate-200 truncate flex-1 cursor-pointer hover:text-sky-400 transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
-                <span className="text-slate-600 text-xs flex-shrink-0">
+                <span className="text-chalk-dim truncate flex-1 cursor-pointer hover:text-accent transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
+                <span className="text-chalk-mut text-xs flex-shrink-0">
                   #{d.userRank} vs #{d.sourceRank}
                 </span>
               </div>
@@ -229,20 +222,20 @@ function AnalysisView({
       {/* Biggest fallers */}
       {fallers.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">
+          <h4 className="text-xs font-semibold text-fall mb-2 uppercase tracking-wide">
             Biggest Fallers (you rank lower)
           </h4>
           <div className="space-y-1">
             {fallers.slice(0, 15).map((d) => (
-              <div key={`${d.player.full_name}-${d.userRank}`} className="flex items-center gap-2 px-2 py-1.5 rounded bg-red-500/5 text-sm">
-                <span className="text-red-400 font-mono font-bold w-10 text-right flex-shrink-0 text-xs">
+              <div key={`${d.player.full_name}-${d.userRank}`} className="flex items-center gap-2 px-2 py-1.5 rounded bg-fall/5 text-sm">
+                <span className="text-fall font-mono font-bold w-10 text-right flex-shrink-0 text-xs">
                   {d.diff}
                 </span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${POS_COLORS[d.player.position] ?? ""}`}>
+                <span className={`badge flex-shrink-0 ${positionBadge(d.player.position)}`}>
                   {d.player.position}
                 </span>
-                <span className="text-slate-200 truncate flex-1 cursor-pointer hover:text-sky-400 transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
-                <span className="text-slate-600 text-xs flex-shrink-0">
+                <span className="text-chalk-dim truncate flex-1 cursor-pointer hover:text-accent transition-colors" onClick={() => onPlayerClick(d.player.id)}>{d.player.full_name}</span>
+                <span className="text-chalk-mut text-xs flex-shrink-0">
                   #{d.userRank} vs #{d.sourceRank}
                 </span>
               </div>

@@ -14,10 +14,10 @@ export default function PickTimer({ seconds, isMyTurn }: Props) {
     <div
       className={`text-2xl font-mono font-bold px-4 py-1.5 rounded-lg ${
         urgent && isMyTurn
-          ? "bg-red-500/20 text-red-400 animate-pulse"
+          ? "bg-fall/20 text-fall animate-pulse"
           : isMyTurn
-          ? "bg-green-500/20 text-green-400"
-          : "bg-white/5 text-slate-400"
+          ? "bg-rise/20 text-rise"
+          : "bg-ink-700 text-chalk-dim"
       }`}
     >
       {display}

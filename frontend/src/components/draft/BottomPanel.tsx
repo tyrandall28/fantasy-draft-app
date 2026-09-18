@@ -16,15 +16,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { apiFetch } from "../../api/client";
 import type { DraftPick, UserRanking, UserRankingDetail, UserRankingEntry } from "../../types";
 import DraftValuePanel from "./DraftValuePanel";
+import { positionBadge } from "../../lib/positionColors";
 
-const POS_BADGE: Record<string, string> = {
-  QB: "bg-red-500/20 text-red-400",
-  RB: "bg-emerald-500/20 text-emerald-400",
-  WR: "bg-sky-500/20 text-sky-400",
-  TE: "bg-amber-500/20 text-amber-400",
-  K: "bg-purple-500/20 text-purple-400",
-  DST: "bg-slate-500/20 text-slate-400",
-};
 
 type Tab = "history" | "rankings" | "analysis";
 
@@ -114,7 +107,7 @@ export default function BottomPanel({ picks }: Props) {
 
   return (
     <div
-      className="bg-[#12141b] border-t border-white/5 flex flex-col flex-shrink-0 transition-[height] duration-200"
+      className="bg-ink-800 border-t border-ink-700 flex flex-col flex-shrink-0 transition-[height] duration-200"
       style={{ height: `${resolvedHeight}px` }}
     >
       {/* Full-width drag handle pinned to the top edge of the panel.
@@ -122,19 +115,19 @@ export default function BottomPanel({ picks }: Props) {
       {!collapsed && !expanded && (
         <div
           onMouseDown={handleMouseDown}
-          className="h-2 w-full cursor-row-resize group flex items-center justify-center hover:bg-sky-500/10 transition-colors flex-shrink-0 border-b border-white/5"
+          className="h-2 w-full cursor-row-resize group flex items-center justify-center hover:brightness-110/10 transition-colors flex-shrink-0 border-b border-ink-700"
           title="Drag up or down to resize"
         >
-          <div className="w-12 h-1 rounded-full bg-slate-600 group-hover:bg-sky-500 transition-colors" />
+          <div className="w-12 h-1 rounded-full bg-ink-600 group-hover:brightness-110 transition-colors" />
         </div>
       )}
 
       {/* Top bar: collapse/expand toggles + tabs */}
-      <div className="flex items-center flex-shrink-0 border-b border-white/5">
+      <div className="flex items-center flex-shrink-0 border-b border-ink-700">
         {/* Collapse toggle */}
         <button
           onClick={toggleCollapse}
-          className="flex items-center gap-1 px-2 py-1.5 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
+          className="flex items-center gap-1 px-2 py-1.5 text-chalk-mut hover:text-chalk-dim transition-colors flex-shrink-0"
           title={collapsed ? "Open panel" : "Collapse panel"}
         >
           <svg
@@ -150,7 +143,7 @@ export default function BottomPanel({ picks }: Props) {
         {/* Expand/shrink toggle */}
         <button
           onClick={toggleExpand}
-          className="flex items-center gap-1 px-2 py-1.5 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
+          className="flex items-center gap-1 px-2 py-1.5 text-chalk-mut hover:text-chalk-dim transition-colors flex-shrink-0"
           title={expanded ? "Restore panel size" : "Expand to full screen"}
         >
           {expanded ? (
@@ -178,8 +171,8 @@ export default function BottomPanel({ picks }: Props) {
               }}
               className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                 activeTab === tab.key
-                  ? "border-sky-500 text-sky-400"
-                  : "border-transparent text-slate-500 hover:text-slate-300"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-chalk-mut hover:text-chalk-dim"
               }`}
             >
               {tab.label}
@@ -208,11 +201,11 @@ function DraftHistoryTab({ picks }: { picks: DraftPick[] }) {
   return (
     <div className="h-full overflow-y-auto">
       {sortedPicks.length === 0 ? (
-        <p className="text-sm text-slate-500 text-center py-8">No picks yet</p>
+        <p className="text-sm text-chalk-mut text-center py-8">No picks yet</p>
       ) : (
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-[#12141b] z-10">
-            <tr className="text-slate-500">
+          <thead className="sticky top-0 bg-ink-800 z-10">
+            <tr className="text-chalk-mut">
               <th className="text-left py-1.5 px-4 font-medium">Pick</th>
               <th className="text-left py-1.5 px-2 font-medium">Round</th>
               <th className="text-left py-1.5 px-2 font-medium">Team</th>
@@ -224,22 +217,22 @@ function DraftHistoryTab({ picks }: { picks: DraftPick[] }) {
           </thead>
           <tbody>
             {sortedPicks.map((pick) => (
-              <tr key={pick.overall_pick} className="border-t border-white/5 hover:bg-white/[0.02]">
-                <td className="py-1.5 px-4 text-slate-300 font-mono">#{pick.overall_pick}</td>
-                <td className="py-1.5 px-2 text-slate-500">R{pick.round_num}</td>
-                <td className="py-1.5 px-2 text-slate-300">{pick.username}</td>
-                <td className="py-1.5 px-2 text-slate-200 font-medium">{pick.player.full_name}</td>
+              <tr key={pick.overall_pick} className="border-t border-ink-700 hover:bg-ink-700/60">
+                <td className="py-1.5 px-4 text-chalk-dim font-mono">#{pick.overall_pick}</td>
+                <td className="py-1.5 px-2 text-chalk-mut">R{pick.round_num}</td>
+                <td className="py-1.5 px-2 text-chalk-dim">{pick.username}</td>
+                <td className="py-1.5 px-2 text-chalk-dim font-medium">{pick.player.full_name}</td>
                 <td className="py-1.5 px-2">
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_BADGE[pick.player.position] ?? ""}`}>
+                  <span className={`badge ${positionBadge(pick.player.position)}`}>
                     {pick.player.position}
                   </span>
                 </td>
-                <td className="py-1.5 px-2 text-slate-500">{pick.player.nfl_team}</td>
+                <td className="py-1.5 px-2 text-chalk-mut">{pick.player.nfl_team}</td>
                 <td className="py-1.5 px-2">
                   {pick.is_auto ? (
-                    <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">Auto</span>
+                    <span className="text-xs bg-caution/20 text-caution px-1.5 py-0.5 rounded">Auto</span>
                   ) : (
-                    <span className="text-xs text-slate-600">Manual</span>
+                    <span className="text-xs text-chalk-mut">Manual</span>
                   )}
                 </td>
               </tr>
@@ -270,25 +263,25 @@ function DarkRankingRow({ entry, displayRank, onToggleLock }: {
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-2 px-3 py-2 border-b border-white/5 text-sm ${
-        isDragging ? "opacity-50 bg-sky-500/10" : "hover:bg-white/[0.03]"
-      } ${entry.is_locked ? "bg-amber-500/5" : ""}`}
+      className={`flex items-center gap-2 px-3 py-2 border-b border-ink-700 text-sm ${
+        isDragging ? "opacity-50 bg-accent/10" : "hover:bg-ink-700"
+      } ${entry.is_locked ? "bg-caution/5" : ""}`}
       {...attributes}
       {...listeners}
     >
-      <span className="text-slate-500 font-mono w-6 text-right flex-shrink-0">{displayRank}</span>
-      <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${POS_BADGE[entry.player.position] ?? ""}`}>
+      <span className="text-chalk-mut font-mono w-6 text-right flex-shrink-0">{displayRank}</span>
+      <span className={`badge flex-shrink-0 ${positionBadge(entry.player.position)}`}>
         {entry.player.position}
       </span>
-      <span className="text-slate-200 font-medium truncate flex-1">{entry.player.full_name}</span>
-      <span className="text-slate-500 flex-shrink-0 w-10">{entry.player.nfl_team}</span>
-      <span className="text-slate-600 flex-shrink-0 w-8">Bye {entry.player.bye_week}</span>
+      <span className="text-chalk-dim font-medium truncate flex-1">{entry.player.full_name}</span>
+      <span className="text-chalk-mut flex-shrink-0 w-10">{entry.player.nfl_team}</span>
+      <span className="text-chalk-mut flex-shrink-0 w-8">Bye {entry.player.bye_week}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
           // TODO: AI-powered health check
         }}
-        className="text-xs px-2 py-0.5 rounded flex-shrink-0 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors cursor-not-allowed"
+        className="text-xs px-2 py-0.5 rounded flex-shrink-0 bg-rise/10 text-rise hover:bg-rise/20 hover:text-rise transition-colors cursor-not-allowed"
         title="Coming soon — AI injury & status check"
       >
         Health
@@ -298,7 +291,7 @@ function DarkRankingRow({ entry, displayRank, onToggleLock }: {
           e.stopPropagation();
           // TODO: AI-powered news search
         }}
-        className="text-xs px-2 py-0.5 rounded flex-shrink-0 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 hover:text-sky-400 transition-colors cursor-not-allowed"
+        className="text-xs px-2 py-0.5 rounded flex-shrink-0 bg-accent/10 text-accent hover:brightness-110/20 hover:text-accent transition-colors cursor-not-allowed"
         title="Coming soon — AI news & tweet search"
       >
         News
@@ -310,8 +303,8 @@ function DarkRankingRow({ entry, displayRank, onToggleLock }: {
         }}
         className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
           entry.is_locked
-            ? "bg-amber-500/20 text-amber-400"
-            : "bg-white/5 text-slate-600 hover:text-slate-400"
+            ? "bg-caution/20 text-caution"
+            : "bg-ink-700 text-chalk-mut hover:text-chalk-dim"
         }`}
       >
         {entry.is_locked ? "Locked" : "Lock"}
@@ -407,12 +400,12 @@ function RankingsTab() {
   return (
     <div className="h-full flex">
       {/* Sidebar: list + create */}
-      <div className="w-56 flex-shrink-0 border-r border-white/5 flex flex-col overflow-hidden">
-        <div className="p-2 border-b border-white/5 space-y-1.5">
+      <div className="w-56 flex-shrink-0 border-r border-ink-700 flex flex-col overflow-hidden">
+        <div className="p-2 border-b border-ink-700 space-y-1.5">
           <select
             value={selectedSource}
             onChange={(e) => setSelectedSource(e.target.value)}
-            className="w-full bg-[#1a1d26] border border-white/10 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+            className="w-full bg-ink-700 border border-ink-600 rounded px-2 py-1 text-xs text-chalk-dim focus:outline-none focus:border-accent"
           >
             {sources.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -424,13 +417,13 @@ function RankingsTab() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Ranking name..."
-              className="flex-1 bg-[#1a1d26] border border-white/10 rounded px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              className="flex-1 bg-ink-700 border border-ink-600 rounded px-2 py-1 text-xs text-chalk-dim placeholder:text-chalk-mut focus:outline-none focus:border-accent"
               onKeyDown={(e) => e.key === "Enter" && createRanking()}
             />
             <button
               onClick={createRanking}
               disabled={creating || !newName.trim() || !selectedSource}
-              className="bg-sky-600 text-white text-xs px-2 py-1 rounded font-medium hover:bg-sky-500 disabled:opacity-30 flex-shrink-0"
+              className="btn-primary text-xs px-2 py-1 disabled:opacity-30 flex-shrink-0"
             >
               {creating ? "..." : "Create"}
             </button>
@@ -441,18 +434,18 @@ function RankingsTab() {
             <button
               key={r.id}
               onClick={() => loadRanking(r.id)}
-              className={`w-full text-left px-3 py-2 text-sm border-b border-white/5 transition-colors ${
+              className={`w-full text-left px-3 py-2 text-sm border-b border-ink-700 transition-colors ${
                 activeRanking?.id === r.id
-                  ? "bg-sky-500/10 text-sky-400"
-                  : "text-slate-300 hover:bg-white/[0.03]"
+                  ? "bg-accent/10 text-accent"
+                  : "text-chalk-dim hover:bg-ink-700"
               }`}
             >
               <p className="font-medium truncate">{r.name}</p>
-              <p className="text-xs text-slate-500">{r.source}</p>
+              <p className="text-xs text-chalk-mut">{r.source}</p>
             </button>
           ))}
           {rankings.length === 0 && (
-            <p className="text-xs text-slate-600 text-center py-4">No rankings yet</p>
+            <p className="text-xs text-chalk-mut text-center py-4">No rankings yet</p>
           )}
         </div>
       </div>
@@ -461,17 +454,17 @@ function RankingsTab() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeRanking ? (
           <>
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 flex-shrink-0">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-ink-700 flex-shrink-0">
               <div>
-                <span className="text-sm font-medium text-slate-200">{activeRanking.name}</span>
-                <span className="text-xs text-slate-500 ml-2">{activeRanking.entries.length} players</span>
+                <span className="text-sm font-medium text-chalk-dim">{activeRanking.name}</span>
+                <span className="text-xs text-chalk-mut ml-2">{activeRanking.entries.length} players</span>
               </div>
               <input
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter..."
-                className="bg-[#1a1d26] border border-white/10 rounded px-2 py-0.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 w-40"
+                className="bg-ink-700 border border-ink-600 rounded px-2 py-0.5 text-xs text-chalk-dim placeholder:text-chalk-mut focus:outline-none focus:border-accent w-40"
               />
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -491,7 +484,7 @@ function RankingsTab() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-slate-600">Select or create a ranking to edit</p>
+            <p className="text-sm text-chalk-mut">Select or create a ranking to edit</p>
           </div>
         )}
       </div>

@@ -147,7 +147,7 @@ function ChartTooltip({ active, label, slots, metric }: {
   if (!d) return null;
 
   return (
-    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
+    <div className="panel-raised px-3 py-2 shadow-xl">
       <p className="text-chalk text-sm font-medium">
         Week {d.week}
         {d.status === "bye" ? "" : ` vs ${d.opponent}`}

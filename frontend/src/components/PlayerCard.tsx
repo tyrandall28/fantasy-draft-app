@@ -187,24 +187,16 @@ export default function PlayerCard({ playerId, onClose }: Props) {
             {/* Tabs. Same segmented control as the analytics header, one surface
                 step down so the track reads as recessed into the card. */}
             <div className="px-6 py-4 border-b border-ink-600">
-              <div className="flex bg-ink-900 border border-ink-600 rounded-lg p-0.5">
+              <div className="seg-inset">
                 <button
                   onClick={() => setTab("seasons")}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                    tab === "seasons"
-                      ? "bg-accent text-accent-ink"
-                      : "text-chalk-mut hover:text-chalk-dim"
-                  }`}
+                  className={`seg-item flex-1 ${tab === "seasons" ? "seg-item-active" : ""}`}
                 >
                   Season Stats
                 </button>
                 <button
                   onClick={() => setTab("weekly")}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                    tab === "weekly"
-                      ? "bg-accent text-accent-ink"
-                      : "text-chalk-mut hover:text-chalk-dim"
-                  }`}
+                  className={`seg-item flex-1 ${tab === "weekly" ? "seg-item-active" : ""}`}
                 >
                   Game Log
                 </button>

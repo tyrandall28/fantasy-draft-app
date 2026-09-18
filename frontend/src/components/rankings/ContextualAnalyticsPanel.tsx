@@ -11,7 +11,7 @@ import ComparePlayersView from "./ComparePlayersView";
 import PositionOverviewView from "./PositionOverviewView";
 import SinglePlayerView from "./SinglePlayerView";
 
-const PLAYER_COLORS = ["#38bdf8", "#f59e0b"];
+const PLAYER_COLORS = ["#4da3ff", "#e0a33e"];
 
 interface Props {
   entries: UserRankingEntry[];
@@ -109,10 +109,10 @@ export default function ContextualAnalyticsPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between flex-shrink-0 min-h-[72px]">
+      <div className="p-4 border-b border-ink-700 flex items-center justify-between flex-shrink-0 min-h-[72px]">
         <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-white">Analytics</h2>
-          <p className="text-xs text-slate-500">
+          <h2 className="font-bold text-chalk">Analytics</h2>
+          <p className="text-xs text-chalk-mut">
             {selectedPlayerIds.length === 0
               ? "Click a player to explore"
               : selectedPlayerIds.length === 1
@@ -147,7 +147,7 @@ export default function ContextualAnalyticsPanel({
             {selectedEntries.length > 1 && (
               <button
                 onClick={onClearSelection}
-                className="text-xs text-slate-500 hover:text-slate-300 px-2"
+                className="text-xs text-chalk-mut hover:text-chalk-dim px-2"
                 title="Clear all"
               >
                 Clear

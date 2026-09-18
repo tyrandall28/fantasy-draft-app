@@ -16,10 +16,10 @@ function DraftRoomContent() {
 
   if (!state) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1117]">
+      <div className="flex items-center justify-center min-h-screen bg-ink-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500 mx-auto mb-3" />
-          <p className="text-slate-400">Connecting to draft room...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent mx-auto mb-3" />
+          <p className="text-chalk-dim">Connecting to draft room...</p>
         </div>
       </div>
     );
@@ -29,13 +29,13 @@ function DraftRoomContent() {
   const isCompleted = state.status === "completed";
 
   return (
-    <div className="h-screen bg-[#0f1117] text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-ink-900 text-chalk flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="bg-[#12141b] border-b border-white/5 px-4 py-2 flex items-center justify-between flex-shrink-0">
+      <div className="bg-ink-800 border-b border-ink-700 px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <Link
             to="/"
-            className="text-slate-400 hover:text-slate-200 transition-colors"
+            className="text-chalk-dim hover:text-chalk-dim transition-colors"
             title="Back to Dashboard"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -43,7 +43,7 @@ function DraftRoomContent() {
             </svg>
           </Link>
           {isCompleted ? (
-            <h1 className="text-lg font-bold text-white">Draft Complete!</h1>
+            <h1 className="text-lg font-bold text-chalk">Draft Complete!</h1>
           ) : (
             <CurrentPickBanner state={state} isMyTurn={isMyTurn} />
           )}
@@ -53,7 +53,7 @@ function DraftRoomContent() {
             <PickTimer seconds={state.seconds_remaining} isMyTurn={isMyTurn} />
           )}
           {!isCompleted && !state.timer_enabled && (
-            <span className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 font-medium">
+            <span className="text-xs px-3 py-1.5 rounded-lg bg-caution/15 text-caution font-medium">
               Offline Mode
             </span>
           )}
@@ -61,7 +61,7 @@ function DraftRoomContent() {
           {state.picks.length > 0 && (
             <button
               onClick={undoPick}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors font-medium"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-fall/15 text-fall hover:bg-fall/25 transition-colors font-medium"
               title="Undo last pick — returns player to available pool"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -71,7 +71,7 @@ function DraftRoomContent() {
             </button>
           )}
 
-          <span className={`text-xs px-2 py-1 rounded ${connected ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+          <span className={`text-xs px-2 py-1 rounded ${connected ? "bg-rise/20 text-rise" : "bg-fall/20 text-fall"}`}>
             {connected ? "Connected" : "Reconnecting..."}
           </span>
 
@@ -79,7 +79,7 @@ function DraftRoomContent() {
           <div className="relative">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-1.5 rounded hover:bg-white/10 transition-colors text-slate-400 hover:text-slate-200"
+              className="p-1.5 rounded hover:bg-ink-600 transition-colors text-chalk-dim hover:text-chalk-dim"
               title="Settings"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -90,32 +90,32 @@ function DraftRoomContent() {
             {showSettings && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setShowSettings(false)} />
-                <div className="absolute right-0 top-full mt-2 w-64 bg-[#1a1d26] border border-white/10 rounded-lg shadow-xl z-40 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/5">
-                    <h4 className="text-sm font-semibold text-slate-200">Draft Settings</h4>
+                <div className="absolute right-0 top-full mt-2 w-64 panel-float z-40 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-ink-700">
+                    <h4 className="text-sm font-semibold text-chalk-dim">Draft Settings</h4>
                   </div>
                   <div className="p-4 space-y-4">
                     {/* Timer toggle */}
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-slate-200">Pick Timer</p>
-                        <p className="text-[10px] text-slate-500">Auto-pick when timer expires</p>
+                        <p className="text-sm text-chalk-dim">Pick Timer</p>
+                        <p className="text-[10px] text-chalk-mut">Auto-pick when timer expires</p>
                       </div>
                       <button
                         onClick={() => toggleTimer(!state.timer_enabled)}
                         className={`relative w-10 h-5 rounded-full transition-colors ${
-                          state.timer_enabled ? "bg-sky-600" : "bg-slate-600"
+                          state.timer_enabled ? "bg-accent" : "bg-ink-600"
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-chalk transition-transform ${
                             state.timer_enabled ? "translate-x-5" : "translate-x-0"
                           }`}
                         />
                       </button>
                     </div>
 
-                    <div className="text-[10px] text-slate-500 pt-2 border-t border-white/5">
+                    <div className="text-[10px] text-chalk-mut pt-2 border-t border-ink-700">
                       {state.timer_enabled
                         ? "Timer is active. Picks will auto-select when time runs out."
                         : "Offline mode. Take your time — no auto-picks."}
@@ -134,7 +134,7 @@ function DraftRoomContent() {
         <div className="flex-1 flex overflow-hidden">
           {/* Left: Available Players */}
           {!isCompleted && (
-            <div className="w-72 flex-shrink-0 border-r border-white/5 overflow-hidden">
+            <div className="w-72 flex-shrink-0 border-r border-ink-700 overflow-hidden">
               <AvailablePlayerList
                 draftedPlayerIds={draftedPlayerIds}
                 onPick={makePick}
@@ -149,7 +149,7 @@ function DraftRoomContent() {
           </div>
 
           {/* Right: My Roster */}
-          <div className="w-64 flex-shrink-0 border-l border-white/5 overflow-hidden">
+          <div className="w-64 flex-shrink-0 border-l border-ink-700 overflow-hidden">
             <TeamRosterPanel state={state} userId={user?.id} />
           </div>
         </div>

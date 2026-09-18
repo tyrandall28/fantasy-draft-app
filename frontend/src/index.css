@@ -30,6 +30,22 @@
   --color-fall: #f0736b; /* form trending down */
   --color-caution: #e0a33e; /* small sample, incomplete data */
 
+  /* Position hues. index.css already spends four colours on meaning -- accent,
+   * rise, fall and caution -- and the palette these replaced sat on top of all
+   * four: QB was the falling red, RB the rising green, WR the interactive blue,
+   * TE the small-sample amber. Six categorical hues on top of four reserved
+   * ones is more than the space holds, so only the four positions drafted in
+   * volume carry a hue. K and DST are one pick each at the end; the letters say
+   * which. See lib/positionColors.ts for how these are consumed. */
+  --color-pos-qb: #b79ae8; /* violet */
+  --color-pos-rb: #5fc3bd; /* teal */
+  --color-pos-wr: #edeae3; /* bone */
+  --color-pos-te: #e08ac8; /* magenta */
+  --color-pos-flex: #9a968c;
+  --color-pos-k: #8c8880;
+  --color-pos-dst: #6f6c66;
+  --color-pos-bn: #6b6862;
+
   --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;
 }
@@ -74,4 +90,79 @@ body {
 .scroll-quiet:focus-within,
 .scroll-quiet.is-scrolling {
   scrollbar-color: rgba(154, 150, 140, 0.35) transparent; /* --color-chalk-dim */
+}
+
+/* ── Component classes ──────────────────────────────────────────────────────
+ *
+ * The tokens above answer "what colour is a surface". These answer "what is a
+ * surface", which is the part that was being retyped. A panel was written out
+ * as bg + border + radius in thirty-odd places, a segmented control four times,
+ * a position badge nineteen; every one of them an independent chance to drift,
+ * and a palette change meant finding all of them again.
+ *
+ * Structure only. A position badge's colour still comes from
+ * lib/positionColors.ts, because that's a data question, not a shape one. */
+@layer components {
+  /* The standard surface: a card, a chart container, a side panel. rounded-lg
+   * is the common case; a page-level card adds `rounded-xl` next to it, which
+   * wins because utilities sit above this layer. */
+  .panel {
+    @apply bg-ink-800 border border-ink-600 rounded-lg;
+  }
+
+  /* A surface sitting on a panel -- a nested block, a sub-card. */
+  .panel-raised {
+    @apply bg-ink-700 border border-ink-600 rounded-lg;
+  }
+
+  /* Detached and above the page: tooltips, dropdowns, popovers. */
+  .panel-float {
+    @apply bg-ink-700 border border-ink-600 rounded-lg shadow-xl;
+  }
+
+  /* Recessed into a panel -- a well for secondary content. */
+  .panel-inset {
+    @apply bg-ink-700/60 border border-ink-700 rounded-lg;
+  }
+
+  /* Segmented control: a recessed track with exactly one filled item. .seg on
+   * the page, .seg-inset inside a panel, where the page colour is what reads
+   * as recessed. */
+  .seg {
+    @apply flex bg-ink-800 border border-ink-600 rounded-lg p-0.5;
+  }
+
+  .seg-inset {
+    @apply flex bg-ink-900 border border-ink-600 rounded-lg p-0.5;
+  }
+
+  .seg-item {
+    @apply px-4 py-1.5 text-sm font-medium rounded-md transition-colors
+      text-chalk-mut hover:text-chalk-dim;
+  }
+
+  /* After .seg-item: equal specificity, so source order is what makes the
+   * active state win. */
+  .seg-item-active {
+    @apply bg-accent text-accent-ink hover:text-accent-ink;
+  }
+
+  /* Position badge. Shape here, colour from lib/positionColors.ts. */
+  .badge {
+    @apply text-xs font-bold px-2 py-0.5 rounded;
+  }
+
+  .badge-sm {
+    @apply text-[10px] font-bold px-1.5 py-0.5 rounded;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-accent-ink font-medium rounded-lg transition-colors
+      hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply bg-ink-700 text-chalk-dim font-medium rounded-lg transition-colors
+      hover:bg-ink-600 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
 }

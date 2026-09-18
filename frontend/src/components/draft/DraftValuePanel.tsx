@@ -105,20 +105,20 @@ export default function DraftValuePanel() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rise opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-rise" />
           </span>
-          <h3 className="text-sm font-semibold text-white">Draft Value — Live</h3>
+          <h3 className="text-sm font-semibold text-chalk">Draft Value — Live</h3>
         </div>
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-slate-500">
+          <span className="text-chalk-mut">
             {totalDrafted} pick{totalDrafted === 1 ? "" : "s"} made
           </span>
           <div className="flex items-center gap-2">
             {(["QB", "RB", "WR", "TE"] as const).map((pos) => (
               <span key={pos} className="flex items-center gap-1">
-                <span className="text-slate-600">{pos}</span>
-                <span className="font-mono text-slate-400">{draftedByPos[pos]}</span>
+                <span className="text-chalk-mut">{pos}</span>
+                <span className="font-mono text-chalk-dim">{draftedByPos[pos]}</span>
               </span>
             ))}
           </div>
@@ -127,16 +127,16 @@ export default function DraftValuePanel() {
 
       {/* Source transparency: spell out which list each side is using so
           users aren't confused when CPU picks differ from our suggestion. */}
-      <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 -mt-2">
+      <div className="flex items-center justify-between flex-wrap gap-x-4 gap-y-1 text-[11px] text-chalk-mut -mt-2">
         <span>
-          <span className="text-slate-600">VOR &amp; suggestion:</span>{" "}
-          <span className="text-slate-300 font-medium">
+          <span className="text-chalk-mut">VOR &amp; suggestion:</span>{" "}
+          <span className="text-chalk-dim font-medium">
             {season ? `${season} season PPG (VOR)` : "historical PPG (VOR)"}
           </span>
         </span>
         <span>
-          <span className="text-slate-600">CPUs draft from:</span>{" "}
-          <span className="text-slate-300 font-medium">
+          <span className="text-chalk-mut">CPUs draft from:</span>{" "}
+          <span className="text-chalk-dim font-medium">
             {botSource ? (BOT_SOURCE_LABELS[botSource] ?? botSource) : "—"}
           </span>
         </span>
@@ -145,14 +145,14 @@ export default function DraftValuePanel() {
       {/* Loading state before pool arrives */}
       {loading && !hasData && (
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent" />
         </div>
       )}
 
       {/* Empty state if the backend has no data for the current season */}
       {!loading && !hasData && (
         <div className="text-center py-8">
-          <p className="text-sm text-slate-500">No analytics data available for this season.</p>
+          <p className="text-sm text-chalk-mut">No analytics data available for this season.</p>
         </div>
       )}
 
@@ -160,12 +160,12 @@ export default function DraftValuePanel() {
       {hasData && (
         <>
           {/* Position depletion: how fast each tier is emptying */}
-          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+          <div className="panel-inset p-2.5">
             <div className="flex items-baseline justify-between mb-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+              <span className="text-[10px] uppercase tracking-wide text-chalk-mut font-semibold">
                 Elite Depletion
               </span>
-              <span className="text-[10px] text-slate-600 italic">
+              <span className="text-[10px] text-chalk-mut italic">
                 top-N drafted by position
               </span>
             </div>
@@ -188,13 +188,13 @@ export default function DraftValuePanel() {
           />
 
           {/* ── Context strip: the "why" behind the suggestion ───── */}
-          <details className="group rounded-lg border border-white/5 bg-white/[0.02]">
-            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide hover:text-slate-200 transition-colors flex items-center justify-between">
+          <details className="group panel-inset">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-chalk-dim uppercase tracking-wide hover:text-chalk-dim transition-colors flex items-center justify-between">
               <span>Why? · positional context</span>
-              <span className="text-[10px] text-slate-600 group-open:hidden">show</span>
-              <span className="text-[10px] text-slate-600 hidden group-open:inline">hide</span>
+              <span className="text-[10px] text-chalk-mut group-open:hidden">show</span>
+              <span className="text-[10px] text-chalk-mut hidden group-open:inline">hide</span>
             </summary>
-            <div className="grid grid-cols-12 gap-4 p-3 border-t border-white/5">
+            <div className="grid grid-cols-12 gap-4 p-3 border-t border-ink-700">
               <div className="col-span-12 md:col-span-4">
                 <DraftPriorityBoard
                   priorityBoard={priorityBoard}

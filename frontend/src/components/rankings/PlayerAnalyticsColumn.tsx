@@ -9,15 +9,8 @@ import type {
   SparklinePoint,
   UserRankingEntry,
 } from "../../types";
+import { positionBadge } from "../../lib/positionColors";
 
-const POS_COLORS: Record<string, string> = {
-  QB: "bg-red-500/20 text-red-400",
-  RB: "bg-emerald-500/20 text-emerald-400",
-  WR: "bg-sky-500/20 text-sky-400",
-  TE: "bg-amber-500/20 text-amber-400",
-  K: "bg-purple-500/20 text-purple-400",
-  DST: "bg-slate-500/20 text-slate-400",
-};
 
 interface StatDef {
   key: keyof PlayerDerivedStats;
@@ -120,7 +113,7 @@ export default function PlayerAnalyticsColumn({
     return map;
   }, [positionGroup, statDefs]);
 
-  const posColor = POS_COLORS[position] ?? "bg-slate-500/20 text-slate-400";
+  const posColor = positionBadge(position);
   const gridCols = compact ? "grid-cols-2" : "grid-cols-2";
 
   return (
@@ -128,17 +121,17 @@ export default function PlayerAnalyticsColumn({
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded ${posColor}`}>
+          <span className={`badge ${posColor}`}>
             {position}
           </span>
           <h3
             className={`${compact ? "text-sm" : "text-lg"} font-bold truncate`}
-            style={accentColor ? { color: accentColor } : { color: "#ffffff" }}
+            style={accentColor ? { color: accentColor } : { color: "var(--color-chalk)" }}
           >
             {entry.player.full_name}
           </h3>
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-chalk-mut">
           {entry.player.nfl_team}
           {entry.player.bye_week ? ` · Bye ${entry.player.bye_week}` : ""} · Rank #{entry.rank}
         </p>
@@ -149,20 +142,20 @@ export default function PlayerAnalyticsColumn({
 
       {/* Loading / no-stats states */}
       {!stats && !loading && !notice && (
-        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-3 text-center">
-          <p className="text-xs text-slate-500">No season stats available.</p>
+        <div className="panel-inset p-3 text-center">
+          <p className="text-xs text-chalk-mut">No season stats available.</p>
         </div>
       )}
       {loading && !stats && (
         <div className="flex items-center justify-center py-4">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-500" />
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
         </div>
       )}
 
       {/* Key stats grid with percentile bars */}
       {stats && (
         <div>
-          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
+          <h4 className="text-[10px] font-semibold text-chalk-dim uppercase tracking-wide mb-2">
             Key Stats ({stats.season})
           </h4>
           <div className={`grid ${gridCols} gap-2`}>
@@ -172,29 +165,29 @@ export default function PlayerAnalyticsColumn({
               const pct = raw != null ? percentileOf(sorted, raw) : 0;
               const barColor =
                 pct >= 75
-                  ? "bg-emerald-400"
+                  ? "bg-rise"
                   : pct >= 50
-                  ? "bg-sky-400"
+                  ? "bg-accent"
                   : pct >= 25
-                  ? "bg-amber-400"
-                  : "bg-red-400";
+                  ? "bg-caution"
+                  : "bg-fall";
               return (
                 <div
                   key={def.key}
-                  className="bg-white/[0.02] border border-white/5 rounded-lg p-2"
+                  className="panel-inset p-2"
                 >
-                  <p className="text-[9px] uppercase tracking-wide text-slate-500">{def.label}</p>
-                  <p className={`${compact ? "text-sm" : "text-lg"} font-mono font-semibold text-slate-100`}>
+                  <p className="text-[9px] uppercase tracking-wide text-chalk-mut">{def.label}</p>
+                  <p className={`${compact ? "text-sm" : "text-lg"} font-mono font-semibold text-chalk`}>
                     {def.format(raw)}
                   </p>
                   <div className="mt-1 flex items-center gap-1">
-                    <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1 bg-ink-700 rounded-full overflow-hidden">
                       <div
                         className={`h-full ${barColor} rounded-full transition-all duration-500`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-[9px] text-slate-500 font-mono w-5 text-right">
+                    <span className="text-[9px] text-chalk-mut font-mono w-5 text-right">
                       {pct}
                     </span>
                   </div>
@@ -209,16 +202,16 @@ export default function PlayerAnalyticsColumn({
           scoring -- it would just draw a flat line at zero. */}
       {sparkline.length >= 2 && hasFantasyPoints(position) && (
         <div>
-          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+          <h4 className="text-[10px] font-semibold text-chalk-dim uppercase tracking-wide mb-1.5">
             Career Trend (PPR/G)
           </h4>
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 flex items-center gap-3">
+          <div className="panel-inset p-2.5 flex items-center gap-3">
             <Sparkline data={sparkline} width={compact ? 140 : 200} height={36} />
-            <div className="flex gap-2 text-xs text-slate-500 flex-wrap">
+            <div className="flex gap-2 text-xs text-chalk-mut flex-wrap">
               {sparkline.map((s) => (
                 <div key={s.season} className="text-center">
-                  <p className="text-[9px] text-slate-600">'{String(s.season).slice(-2)}</p>
-                  <p className="font-mono text-[11px] text-slate-300">
+                  <p className="text-[9px] text-chalk-mut">'{String(s.season).slice(-2)}</p>
+                  <p className="font-mono text-[11px] text-chalk-dim">
                     {s.ppr_per_game != null ? s.ppr_per_game.toFixed(1) : "-"}
                   </p>
                 </div>
@@ -231,7 +224,7 @@ export default function PlayerAnalyticsColumn({
       {/* Weekly trend chart */}
       {weekly.length > 0 && position !== "DST" && (
         <div>
-          <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+          <h4 className="text-[10px] font-semibold text-chalk-dim uppercase tracking-wide mb-1.5">
             Weekly Trend
           </h4>
           <WeeklyTrendChart weeks={weekly} position={position} />

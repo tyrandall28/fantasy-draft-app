@@ -76,7 +76,7 @@ const totalTds: H2HMetric = {
 
 const H2H_METRICS: H2HMetric[] = [pprPoints, standardPoints, snapPct, totalYards, totalTds];
 
-const PLAYER_COLORS = ["#38bdf8", "#f59e0b"]; // sky, amber — match compare pills
+const PLAYER_COLORS = ["#4da3ff", "#e0a33e"]; // sky, amber — match compare pills
 
 interface ChartPoint {
   week: number;
@@ -119,8 +119,8 @@ function H2HTooltip({
   if (!Number.isFinite(week)) return null;
 
   return (
-    <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white text-sm font-medium mb-1">Week {week}</p>
+    <div className="panel-raised px-3 py-2 shadow-xl">
+      <p className="text-chalk text-sm font-medium mb-1">Week {week}</p>
       {players.map((p) => {
         const slot = p.byWeek.get(week);
         if (!slot) return null;
@@ -132,7 +132,7 @@ function H2HTooltip({
             {value != null ? (
               <span className="font-mono">{metric.format(value)}</span>
             ) : (
-              <span className="text-slate-400">
+              <span className="text-chalk-dim">
                 {ABSENCE_TEXT[status === "played" ? "missed" : status]}
               </span>
             )}
@@ -236,8 +236,8 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
             onClick={() => setActiveMetric(m.key)}
             className={`text-[11px] px-2 py-0.5 rounded transition-colors ${
               activeMetric === m.key
-                ? "bg-sky-600 text-white"
-                : "bg-white/5 text-slate-400 hover:bg-white/10"
+                ? "bg-accent text-accent-ink"
+                : "bg-ink-700 text-chalk-dim hover:bg-ink-600"
             }`}
           >
             {m.label}
@@ -246,7 +246,7 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
       </div>
 
       {!hasData ? (
-        <div className="flex items-center justify-center h-[180px] text-xs text-slate-500">
+        <div className="flex items-center justify-center h-[180px] text-xs text-chalk-mut">
           No weekly data available for {metric.label}
         </div>
       ) : (
@@ -268,7 +268,7 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
             />
             <YAxis
               domain={metric.domain ?? ["auto", "auto"]}
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              tick={{ fill: "#6b6862", fontSize: 10 }}
               axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
               tickLine={false}
               tickFormatter={metric.tickFormat}
@@ -278,7 +278,7 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
               cursor={false}
             />
             <Legend
-              wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 4 }}
+              wrapperStyle={{ fontSize: 11, color: "#9a968c", paddingTop: 4 }}
               iconType="line"
             />
             <Line
@@ -306,7 +306,7 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
       )}
 
       {hasData && absences.length > 0 && (
-        <p className="text-[10px] text-slate-500 mt-1">
+        <p className="text-[10px] text-chalk-mut mt-1">
           <span className="font-mono">&#10005;</span> did not play &middot;{" "}
           <span className="font-mono">&#9675;</span> bye &mdash; in each player&apos;s colour
         </p>

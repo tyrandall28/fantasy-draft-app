@@ -50,9 +50,9 @@ export default function Sparkline({ data, width = 56, height = 20 }: Props) {
   const mean = sumY / n;
   const normalizedSlope = mean > 0 ? slope / mean : 0;
 
-  let color = "#64748b"; // slate (flat)
-  if (normalizedSlope > 0.05) color = "#34d399";  // emerald (up)
-  if (normalizedSlope < -0.05) color = "#f87171"; // red (down)
+  let color = "#6b6862"; // slate (flat)
+  if (normalizedSlope > 0.05) color = "#5cc98d";  // emerald (up)
+  if (normalizedSlope < -0.05) color = "#f0736b"; // red (down)
 
   return (
     <svg

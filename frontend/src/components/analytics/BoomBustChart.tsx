@@ -28,20 +28,12 @@ interface ScatterPoint {
   pprPerGame: number;
 }
 
-const POSITION_COLORS: Record<string, string> = {
-  QB: "#edeae3",
-  RB: "#edeae3",
-  WR: "#edeae3",
-  TE: "#edeae3",
-  K: "#edeae3",
-};
-
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ScatterPoint }> }) {
   if (!active || !payload?.[0]) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white font-medium text-sm">{d.name}</p>
+    <div className="panel-raised px-3 py-2 shadow-xl">
+      <p className="text-chalk font-medium text-sm">{d.name}</p>
       <p className="text-chalk-mut text-xs">{d.team} &middot; {d.gp} games</p>
       <div className="mt-1.5 space-y-0.5">
         <p className="text-chalk-dim text-xs">
@@ -95,7 +87,8 @@ export default function BoomBustChart({ data, position }: Props) {
       : sorted[mid].y;
   }, [scatterData]);
 
-  const color = POSITION_COLORS[position] || "#edeae3";
+  // One position per chart, so a per-position hue would encode nothing.
+  const color = "#edeae3";
 
   // Hide labels while dots are animating, then fade them in
   // We set the animation duration ourselves, so the timeout matches exactly

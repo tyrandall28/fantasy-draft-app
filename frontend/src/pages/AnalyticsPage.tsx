@@ -280,7 +280,7 @@ export default function AnalyticsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex bg-ink-800 border border-ink-600 rounded-lg p-0.5">
+        <div className="seg">
           {POSITIONS.map((pos) => {
             const notice = positionNotice(pos);
             return (
@@ -297,12 +297,12 @@ export default function AnalyticsPage() {
                   }
                 }}
                 title={notice ? notice.title : undefined}
-                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md ${
+                className={`seg-item flex items-center gap-1.5 ${
                   position === pos
-                    ? "bg-accent text-accent-ink"
+                    ? "seg-item-active"
                     : notice
-                      ? "text-chalk-mut/60 hover:text-chalk-mut"
-                      : "text-chalk-mut hover:text-chalk-dim"
+                      ? "!text-chalk-mut/60 hover:!text-chalk-mut"
+                      : ""
                 }`}
               >
                 {pos}
@@ -336,7 +336,7 @@ export default function AnalyticsPage() {
         </select>
 
         {/* View tabs */}
-        <div className="flex bg-ink-800 border border-ink-600 rounded-lg p-0.5 ml-auto">
+        <div className="seg ml-auto">
           {([
             { key: "rankings" as ViewTab, label: "Rankings" },
             { key: "boom-bust" as ViewTab, label: "Boom / Bust" },
@@ -348,11 +348,7 @@ export default function AnalyticsPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md ${
-                activeTab === tab.key
-                  ? "bg-accent text-accent-ink"
-                  : "text-chalk-mut hover:text-chalk-dim"
-              }`}
+              className={`seg-item ${activeTab === tab.key ? "seg-item-active" : ""}`}
             >
               {tab.label}
             </button>
@@ -394,7 +390,7 @@ export default function AnalyticsPage() {
 
       {/* Boom/Bust Scatter Chart */}
       {activeTab === "boom-bust" && (
-        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+        <div className="panel rounded-xl p-5">
           <h2 className="text-lg font-semibold text-chalk mb-1">
             Boom / Bust — {position}s
           </h2>
@@ -407,7 +403,7 @@ export default function AnalyticsPage() {
 
       {/* Compare Radar Chart */}
       {activeTab === "compare" && (
-        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+        <div className="panel rounded-xl p-5">
           <h2 className="text-lg font-semibold text-chalk mb-1">
             Player Comparison — {position}s
           </h2>
@@ -451,7 +447,7 @@ export default function AnalyticsPage() {
                   className="bg-ink-800 border border-ink-600 text-chalk text-sm rounded-lg px-3 py-1.5 w-64 placeholder:text-chalk-mut focus:outline-none focus:border-chalk-mut"
                 />
                 {compareSearchResults.length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-ink-700 border border-ink-600 rounded-lg shadow-xl z-10 overflow-hidden">
+                  <div className="absolute top-full left-0 mt-1 w-full panel-float z-10 overflow-hidden">
                     {compareSearchResults.map((p) => (
                       <button
                         key={p.player_id}
@@ -560,7 +556,7 @@ export default function AnalyticsPage() {
 
       {/* Target Share vs Air Yards Chart */}
       {activeTab === "target-air" && (
-        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+        <div className="panel rounded-xl p-5">
           <h2 className="text-lg font-semibold text-chalk mb-1">
             Target Share vs Air Yards — {position}s
           </h2>
@@ -574,7 +570,7 @@ export default function AnalyticsPage() {
 
       {/* Position Rankings Table */}
       {activeTab === "rankings" && (
-      <div className="bg-ink-800 border border-ink-600 rounded-xl overflow-hidden">
+      <div className="panel rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0">
             <thead>
