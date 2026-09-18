@@ -3,6 +3,7 @@ import { apiFetch } from "../api/client";
 import WeeklyTrendChart from "./analytics/WeeklyTrendChart";
 import PositionDataNotice from "./analytics/PositionDataNotice";
 import { positionNotice } from "../lib/positionData";
+import { ABSENCE_LABEL, ABSENCE_MARK, weekStatus } from "../lib/weeklyTimeline";
 import type { PlayerDetail, PlayerWeekly } from "../types";
 
 const POS_COLOR: Record<string, string> = {
@@ -363,6 +364,12 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
   const isK = position === "K";
   const isSkill = ["RB", "WR", "TE"].includes(position);
 
+  // Stat columns after Wk and Opp, so a "did not play" row can span them.
+  let statColumns = 1; // PPR
+  if (isQB) statColumns += 5;
+  if (isSkill) statColumns += position === "RB" ? 7 : 4;
+  if (isK) statColumns += 3;
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
@@ -405,7 +412,29 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
           </tr>
         </thead>
         <tbody>
-          {weeks.map((w) => (
+          {weeks.map((w) => {
+            // A week he sat out gets a row of its own rather than being skipped,
+            // so the table tells the same story as the chart above it: the weeks
+            // are continuous and the absences are visible.
+            const status = weekStatus(w);
+            if (status !== "played") {
+              return (
+                <tr key={w.week} className="border-b border-white/[0.03] bg-white/[0.015]">
+                  <td className="py-1.5 px-1.5 font-mono text-slate-600">{w.week}</td>
+                  <td className="py-1.5 px-1.5 text-slate-600">
+                    {status === "bye" ? "—" : w.opponent ?? "—"}
+                  </td>
+                  <td
+                    colSpan={statColumns}
+                    className="py-1.5 px-1.5 text-center italic"
+                    style={{ color: status === "missed" ? ABSENCE_MARK.missed : "#475569" }}
+                  >
+                    {ABSENCE_LABEL[status]}
+                  </td>
+                </tr>
+              );
+            }
+            return (
             <tr key={w.week} className="border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors">
               <td className="py-1.5 px-1.5 font-mono text-slate-400">{w.week}</td>
               <td className="py-1.5 px-1.5 text-slate-300">{w.opponent ?? "—"}</td>
@@ -442,7 +471,8 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
               )}
               <td className="text-center py-1.5 px-1.5 text-sky-400 font-bold">{w.fantasy_points_ppr?.toFixed(1) ?? "—"}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

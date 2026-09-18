@@ -32,3 +32,14 @@ backend/rankings_ingester/backups/
 # Misc
 # Local notes / prompt scratch - not useful to a reader of the repo.
 claude.md
+
+# Screenshots
+# Working screenshots pasted in for review are noise in the history. The four
+# images the README renders are named in docs/screenshots/README.md and are
+# un-ignored below, so they still commit normally once captured.
+/screenshots/
+docs/screenshots/*.png
+!docs/screenshots/draft-room.png
+!docs/screenshots/rankings.png
+!docs/screenshots/analytics.png
+!docs/screenshots/assistant.png

@@ -10,6 +10,8 @@ import {
   Legend,
 } from "recharts";
 import type { PlayerWeekly } from "../../types";
+import { weekStatus, type WeekStatus } from "../../lib/weeklyTimeline";
+import { markerColumns, weekTick, type WeekMark } from "./absenceLayer";
 
 /** A universally-available metric that can compare any two players, regardless of position */
 interface H2HMetric {
@@ -81,25 +83,62 @@ interface ChartPoint {
   [playerName: string]: string | number | null;
 }
 
+/** A week where at least one of the two was not on the field, and why. */
+interface AbsenceColumn {
+  week: number;
+  band?: string;
+  marks: WeekMark[];
+}
+
+const ABSENCE_TEXT: Record<Exclude<WeekStatus, "played">, string> = {
+  missed: "did not play",
+  bye: "on bye",
+  inactive: "not yet in the NFL",
+};
+
+interface TooltipPlayer {
+  name: string;
+  color: string;
+  byWeek: Map<number, PlayerWeekly>;
+}
+
 function H2HTooltip({
   active,
-  payload,
+  label,
   metric,
+  players,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: ChartPoint; value: number; name: string; color: string }>;
+  label?: string | number;
   metric: H2HMetric;
+  /** Both players in fixed order, so an absent week can still name them. */
+  players: TooltipPlayer[];
 }) {
-  if (!active || !payload?.length) return null;
-  const week = payload[0].payload.week;
+  if (!active) return null;
+  const week = typeof label === "number" ? label : Number(label);
+  if (!Number.isFinite(week)) return null;
+
   return (
     <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
       <p className="text-white text-sm font-medium mb-1">Week {week}</p>
-      {payload.map((entry) => (
-        <p key={entry.name} className="text-xs" style={{ color: entry.color }}>
-          {entry.name}: <span className="font-mono">{metric.format(entry.value)}</span>
-        </p>
-      ))}
+      {players.map((p) => {
+        const slot = p.byWeek.get(week);
+        if (!slot) return null;
+        const status = weekStatus(slot);
+        const value = status === "played" ? metric.getValue(slot) : null;
+        return (
+          <p key={p.name} className="text-xs" style={{ color: p.color }}>
+            {p.name}:{" "}
+            {value != null ? (
+              <span className="font-mono">{metric.format(value)}</span>
+            ) : (
+              <span className="text-slate-400">
+                {ABSENCE_TEXT[status === "played" ? "missed" : status]}
+              </span>
+            )}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -115,27 +154,77 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
   const [activeMetric, setActiveMetric] = useState<string>("ppr");
   const metric = H2H_METRICS.find((m) => m.key === activeMetric) ?? H2H_METRICS[0];
 
-  // Merge both players' week data into a single array keyed by week number
+  const players = useMemo<TooltipPlayer[]>(
+    () => [
+      { name: nameA, color: PLAYER_COLORS[0], byWeek: new Map(weeksA.map((w) => [w.week, w])) },
+      { name: nameB, color: PLAYER_COLORS[1], byWeek: new Map(weeksB.map((w) => [w.week, w])) },
+    ],
+    [weeksA, weeksB, nameA, nameB]
+  );
+
+  // Every week either of them has a slot for, in order. A week one of them sat
+  // out carries a null for him, which breaks his line rather than bridging it --
+  // the old connectNulls drew a straight line through a month on the sideline.
   const chartData = useMemo<ChartPoint[]>(() => {
-    const byWeek = new Map<number, ChartPoint>();
+    const weeks = new Set<number>();
+    for (const p of players) for (const week of p.byWeek.keys()) weeks.add(week);
 
-    const addWeeks = (weeks: PlayerWeekly[], playerName: string) => {
-      for (const w of weeks) {
-        const val = metric.getValue(w);
-        if (val == null) continue;
-        const existing = byWeek.get(w.week) ?? { week: w.week };
-        existing[playerName] = val;
-        byWeek.set(w.week, existing);
+    return [...weeks]
+      .sort((a, b) => a - b)
+      .map((week) => {
+        const point: ChartPoint = { week };
+        for (const p of players) {
+          const slot = p.byWeek.get(week);
+          point[p.name] = slot && weekStatus(slot) === "played" ? metric.getValue(slot) : null;
+        }
+        return point;
+      });
+  }, [players, metric]);
+
+  /** Weeks where at least one of them was out. */
+  const absences = useMemo<AbsenceColumn[]>(() => {
+    const columns: AbsenceColumn[] = [];
+    for (const point of chartData) {
+      const marks: WeekMark[] = [];
+      let present = 0;
+      for (const p of players) {
+        const slot = p.byWeek.get(point.week);
+        if (!slot) continue;
+        const status = weekStatus(slot);
+        if (status === "played") {
+          present++;
+        } else {
+          marks.push({ color: p.color, kind: status === "bye" ? "bye" : "missed" });
+        }
       }
-    };
+      if (marks.length === 0) continue;
+      columns.push({
+        week: point.week,
+        // Shaded only when neither played: there is nothing to compare there.
+        band: present === 0 ? "rgba(148,163,184,0.06)" : undefined,
+        marks,
+      });
+    }
+    return columns;
+  }, [chartData, players]);
 
-    addWeeks(weeksA, nameA);
-    addWeeks(weeksB, nameB);
+  /** Dim a week on the axis only when neither of them played it. */
+  const statusByWeek = useMemo(() => {
+    const map = new Map<number, WeekStatus>();
+    for (const point of chartData) {
+      const anyPlayed = players.some((p) => {
+        const slot = p.byWeek.get(point.week);
+        return slot != null && weekStatus(slot) === "played";
+      });
+      map.set(point.week, anyPlayed ? "played" : "bye");
+    }
+    return map;
+  }, [chartData, players]);
 
-    return [...byWeek.values()].sort((a, b) => (a.week as number) - (b.week as number));
-  }, [weeksA, weeksB, nameA, nameB, metric]);
-
-  const hasData = chartData.length > 0;
+  const weekTicks = useMemo(() => chartData.map((d) => d.week), [chartData]);
+  const hasData = chartData.some((d) => players.some((p) => d[p.name] != null));
+  const firstWeek = chartData[0]?.week ?? 1;
+  const lastWeek = chartData[chartData.length - 1]?.week ?? 1;
 
   return (
     <div>
@@ -163,10 +252,17 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -15 }}>
+            {/* Behind everything: the weeks one of them was not on the field. */}
+            {markerColumns(absences)}
+
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
             <XAxis
               dataKey="week"
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              type="number"
+              domain={[firstWeek - 0.5, lastWeek + 0.5]}
+              ticks={weekTicks}
+              allowDecimals={false}
+              tick={weekTick(statusByWeek)}
               axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
               tickLine={false}
             />
@@ -177,7 +273,10 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
               tickLine={false}
               tickFormatter={metric.tickFormat}
             />
-            <Tooltip content={<H2HTooltip metric={metric} />} cursor={false} />
+            <Tooltip
+              content={<H2HTooltip metric={metric} players={players} />}
+              cursor={false}
+            />
             <Legend
               wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 4 }}
               iconType="line"
@@ -189,7 +288,7 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
               strokeWidth={2}
               dot={{ r: 3, fill: PLAYER_COLORS[0], strokeWidth: 0 }}
               activeDot={{ r: 5, fill: PLAYER_COLORS[0], strokeWidth: 0 }}
-              connectNulls
+              connectNulls={false}
               animationDuration={400}
             />
             <Line
@@ -199,11 +298,18 @@ export default function HeadToHeadWeeklyChart({ weeksA, weeksB, nameA, nameB }: 
               strokeWidth={2}
               dot={{ r: 3, fill: PLAYER_COLORS[1], strokeWidth: 0 }}
               activeDot={{ r: 5, fill: PLAYER_COLORS[1], strokeWidth: 0 }}
-              connectNulls
+              connectNulls={false}
               animationDuration={400}
             />
           </LineChart>
         </ResponsiveContainer>
+      )}
+
+      {hasData && absences.length > 0 && (
+        <p className="text-[10px] text-slate-500 mt-1">
+          <span className="font-mono">&#10005;</span> did not play &middot;{" "}
+          <span className="font-mono">&#9675;</span> bye &mdash; in each player&apos;s colour
+        </p>
       )}
     </div>
   );

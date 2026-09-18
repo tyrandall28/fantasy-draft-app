@@ -65,6 +65,10 @@ assistant alongside the board.
 - **2,782 player-seasons** of totals, plus a derived-metrics table with per-game rates, efficiency, EPA/CPOE, target share, snap share, and boom/bust consistency
 - **3,352 player bios** including draft capital and combine measurables (1,807 with a recorded 40 time)
 - Charts for weekly trends, boom/bust distribution, target share vs. air yards, snap trends, and head-to-head comparison
+- Weekly charts plot the whole season, not just the games played: a week the
+  player's team played without him is shaded red and crossed, his bye is shaded
+  grey, so a month on injured reserve reads as a month rather than as one
+  week-to-week step
 
 ### AI assistant ("Ask AI")
 Ask questions in plain English — *"Who led WRs in touchdowns in 2024?"*,
@@ -132,7 +136,7 @@ fantasy-draft-app/
 │   │   ├── refresh_data.py     # one-command refresh, then verify
 │   │   └── reset_db.py         # wipe everything (dev only)
 │   ├── alembic/versions/       # migrations
-│   └── tests/                  # 168 tests, SQLite-backed
+│   └── tests/                  # 198 tests, SQLite-backed
 └── frontend/
     └── src/
         ├── pages/              # Login, Dashboard, Rankings, Lobby, DraftRoom, Analytics, Assistant
@@ -182,7 +186,7 @@ Details in [RUNBOOK.md § Refresh the data](RUNBOOK.md#3-refresh-the-data).
 
 ```powershell
 cd backend
-python -m pytest -q                 # 168 tests, in-memory SQLite, no Postgres needed
+python -m pytest -q                 # 198 tests, in-memory SQLite, no Postgres needed
 ```
 
 CI additionally applies every migration to an empty PostgreSQL database and runs
@@ -216,7 +220,7 @@ gitignored `backend/.env`.
 | GET | `/api/players` | List players (`?position=QB&search=mahomes`) |
 | GET | `/api/players/{id}/stats` | Career stats, all seasons |
 | GET | `/api/players/{id}/bio` | Bio + combine data |
-| GET | `/api/players/{id}/weekly?season=2025` | Weekly game logs |
+| GET | `/api/players/{id}/weekly?season=2025` | Every week of the season: game logs plus `status` for the weeks he missed and his bye |
 | GET | `/api/players/base-rankings?source=espn_ppr` | A base ranking list |
 | GET | `/api/rankings/sources` | Available base sources |
 | GET/POST | `/api/rankings` | List / create custom ranking lists |

@@ -10,6 +10,16 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { PlayerWeekly } from "../../types";
+import {
+  ABSENCE_LABEL,
+  ABSENCE_MARK,
+  absenceCounts,
+  absenceRuns,
+  weekDomain,
+  weekStatus,
+  type WeekStatus,
+} from "../../lib/weeklyTimeline";
+import { absenceBands, weekTick } from "./absenceLayer";
 
 /** Defines a single trendable metric */
 export interface TrendMetric {
@@ -128,23 +138,41 @@ export function getMetricsForPosition(position: string): TrendMetric[] {
 
 interface ChartPoint {
   week: number;
-  value: number;
+  /** null for a week with no game, which breaks the line instead of bridging it. */
+  value: number | null;
   opponent: string;
+  status: WeekStatus;
 }
 
-function ChartTooltip({ active, payload, metric }: {
+function ChartTooltip({ active, label, slots, metric }: {
   active?: boolean;
-  payload?: Array<{ payload: ChartPoint }>;
+  label?: string | number;
+  slots: ChartPoint[];
   metric: TrendMetric;
 }) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
+  if (!active) return null;
+  const week = typeof label === "number" ? label : Number(label);
+  const d = slots.find((s) => s.week === week);
+  if (!d) return null;
+
   return (
     <div className="bg-[#1a1d28] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-white text-sm font-medium">Week {d.week} vs {d.opponent}</p>
-      <p className="text-slate-300 text-xs mt-1">
-        {metric.label}: <span className="text-sky-300 font-mono">{metric.format(d.value)}</span>
+      <p className="text-white text-sm font-medium">
+        Week {d.week}
+        {d.status === "bye" ? "" : ` vs ${d.opponent}`}
       </p>
+      {d.value != null ? (
+        <p className="text-slate-300 text-xs mt-1">
+          {metric.label}: <span className="text-sky-300 font-mono">{metric.format(d.value)}</span>
+        </p>
+      ) : (
+        <p
+          className="text-xs mt-1"
+          style={{ color: d.status === "missed" ? ABSENCE_MARK.missed : "#94a3b8" }}
+        >
+          {ABSENCE_LABEL[d.status === "played" ? "missed" : d.status]}
+        </p>
+      )}
     </div>
   );
 }
@@ -160,25 +188,41 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
 
   const metric = metrics.find((m) => m.key === activeMetric) ?? metrics[0];
 
+  // Every week of the season gets a slot. A week he didn't play carries a null
+  // value, which keeps its place on the axis and breaks the line there.
   const chartData = useMemo<ChartPoint[]>(() => {
     if (!metric) return [];
-    return weeks
-      .map((w) => {
-        const val = metric.getValue(w);
-        if (val == null) return null;
-        return { week: w.week, value: val, opponent: w.opponent ?? "—" };
-      })
-      .filter((d): d is ChartPoint => d !== null);
+    return weeks.map((w) => {
+      const status = weekStatus(w);
+      return {
+        week: w.week,
+        value: status === "played" ? metric.getValue(w) : null,
+        opponent: w.opponent ?? "—",
+        status,
+      };
+    });
   }, [weeks, metric]);
 
-  // Linear regression
+  const played = useMemo(() => chartData.filter((d) => d.value != null), [chartData]);
+  const runs = useMemo(() => absenceRuns(weeks), [weeks]);
+  const counts = useMemo(() => absenceCounts(weeks), [weeks]);
+  const [firstWeek, lastWeek] = useMemo(() => weekDomain(weeks), [weeks]);
+  const statusByWeek = useMemo(
+    () => new Map(chartData.map((d) => [d.week, d.status])),
+    [chartData]
+  );
+  const weekTicks = useMemo(() => chartData.map((d) => d.week), [chartData]);
+
+  // Linear regression over the games he actually played -- an absence is not a
+  // zero, and averaging one in would drag the trend down for weeks he never had
+  // a chance to score in.
   const trend = useMemo(() => {
-    if (chartData.length < 2) return null;
-    const n = chartData.length;
-    const sumX = chartData.reduce((s, d) => s + d.week, 0);
-    const sumY = chartData.reduce((s, d) => s + d.value, 0);
-    const sumXY = chartData.reduce((s, d) => s + d.week * d.value, 0);
-    const sumXX = chartData.reduce((s, d) => s + d.week * d.week, 0);
+    if (played.length < 2) return null;
+    const n = played.length;
+    const sumX = played.reduce((s, d) => s + d.week, 0);
+    const sumY = played.reduce((s, d) => s + (d.value as number), 0);
+    const sumXY = played.reduce((s, d) => s + d.week * (d.value as number), 0);
+    const sumXX = played.reduce((s, d) => s + d.week * d.week, 0);
     const denom = n * sumXX - sumX * sumX;
     if (denom === 0) return null;
     const slope = (n * sumXY - sumX * sumY) / denom;
@@ -195,12 +239,12 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
       color,
       label,
       avg: Math.round(avg * 10) / 10,
-      startWeek: chartData[0].week,
-      endWeek: chartData[chartData.length - 1].week,
-      startY: slope * chartData[0].week + intercept,
-      endY: slope * chartData[chartData.length - 1].week + intercept,
+      startWeek: played[0].week,
+      endWeek: played[played.length - 1].week,
+      startY: slope * played[0].week + intercept,
+      endY: slope * played[played.length - 1].week + intercept,
     };
-  }, [chartData, metric]);
+  }, [played, metric]);
 
   if (!metric || metrics.length === 0) return null;
   const lineColor = metric.color ?? "#38bdf8";
@@ -234,60 +278,83 @@ export default function WeeklyTrendChart({ weeks, position }: Props) {
         )}
       </div>
 
-      {chartData.length < 2 ? (
+      {played.length < 2 ? (
         <div className="flex items-center justify-center h-[120px] text-xs text-slate-500">
           Not enough data for {metric.label} trend
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={140}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: -15 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-            <XAxis
-              dataKey="week"
-              tick={{ fill: "#64748b", fontSize: 10 }}
-              axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
-              tickLine={false}
-            />
-            <YAxis
-              domain={metric.domain ?? ["auto", "auto"]}
-              tick={{ fill: "#64748b", fontSize: 10 }}
-              axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
-              tickLine={false}
-              tickFormatter={metric.tickFormat}
-            />
-            <Tooltip content={<ChartTooltip metric={metric} />} cursor={false} />
+        <>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 0, left: -15 }}>
+              {/* Behind everything: the weeks he wasn't on the field. */}
+              {absenceBands(runs)}
 
-            {trend && (
-              <ReferenceLine
-                y={trend.avg}
-                stroke="rgba(255,255,255,0.1)"
-                strokeDasharray="4 4"
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <XAxis
+                dataKey="week"
+                type="number"
+                domain={[firstWeek - 0.5, lastWeek + 0.5]}
+                ticks={weekTicks}
+                allowDecimals={false}
+                tick={weekTick(statusByWeek)}
+                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                tickLine={false}
               />
-            )}
+              <YAxis
+                domain={metric.domain ?? ["auto", "auto"]}
+                tick={{ fill: "#64748b", fontSize: 10 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                tickLine={false}
+                tickFormatter={metric.tickFormat}
+              />
+              <Tooltip
+                content={<ChartTooltip slots={chartData} metric={metric} />}
+                cursor={false}
+              />
 
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke={lineColor}
-              strokeWidth={2}
-              dot={{ r: 3, fill: lineColor, strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: lineColor, strokeWidth: 0 }}
-              animationDuration={400}
-            />
+              {trend && (
+                <ReferenceLine
+                  y={trend.avg}
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeDasharray="4 4"
+                />
+              )}
 
-            {trend && (
-              <ReferenceLine
-                segment={[
-                  { x: trend.startWeek, y: trend.startY },
-                  { x: trend.endWeek, y: trend.endY },
-                ]}
-                stroke={trend.color}
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={lineColor}
                 strokeWidth={2}
-                strokeDasharray="6 3"
+                dot={{ r: 3, fill: lineColor, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: lineColor, strokeWidth: 0 }}
+                connectNulls={false}
+                animationDuration={400}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+
+              {trend && (
+                <ReferenceLine
+                  segment={[
+                    { x: trend.startWeek, y: trend.startY },
+                    { x: trend.endWeek, y: trend.endY },
+                  ]}
+                  stroke={trend.color}
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+
+          {counts.missed > 0 && (
+            <p className="text-[10px] text-slate-500 mt-1">
+              Played {counts.played} of {counts.teamGames} team games —{" "}
+              <span style={{ color: ABSENCE_MARK.missed }}>
+                {counts.missed} missed
+              </span>
+              , shaded above
+            </p>
+          )}
+        </>
       )}
     </div>
   );

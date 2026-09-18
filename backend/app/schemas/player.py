@@ -102,6 +102,10 @@ class PlayerWeeklyResponse(BaseModel):
     week: int
     opponent: str | None = None
     team: str | None = None
+    # "played" | "missed" | "bye" | "inactive". Weeks that aren't "played" carry
+    # no stats -- they exist so a chart can keep the slot instead of closing the
+    # gap, which made a month on injured reserve look like a normal week.
+    status: str = "played"
     # Passing
     pass_attempts: int | None = None
     pass_completions: int | None = None

@@ -95,6 +95,12 @@ export interface PlayerWeekly {
   week: number;
   opponent: string | null;
   team: string | null;
+  /**
+   * Whether he played that week. The endpoint returns a slot for every week of
+   * the season, so a week he sat out keeps its place on a chart instead of
+   * being closed up. Only "played" slots carry stats.
+   */
+  status: "played" | "missed" | "bye" | "inactive";
   pass_attempts: number | null;
   pass_completions: number | null;
   pass_yards: number | null;

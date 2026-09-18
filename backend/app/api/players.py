@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DB
-from app.models.player import BaseRanking, Player, PlayerBio, PlayerSeason, PlayerWeeklyStat
+from app.models.player import BaseRanking, Player, PlayerBio, PlayerSeason
 from app.schemas.player import (
     BaseRankingResponse,
     PlayerBioResponse,
@@ -12,6 +12,7 @@ from app.schemas.player import (
     PlayerSeasonResponse,
     PlayerWeeklyResponse,
 )
+from app.services.weekly_timeline import PLAYED, player_season_timeline
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -88,13 +89,25 @@ async def get_player_weekly(
     db: DB,
     season: int = Query(..., description="NFL season year"),
 ):
-    """Weekly game logs for a player in a given season."""
-    result = await db.execute(
-        select(PlayerWeeklyStat)
-        .where(
-            PlayerWeeklyStat.player_id == player_id,
-            PlayerWeeklyStat.season == season,
-        )
-        .order_by(PlayerWeeklyStat.week)
-    )
-    return result.scalars().all()
+    """A player's season week by week: every game his team played, plus the bye.
+
+    Weeks he sat out come back with `status` set and no stats, so callers can
+    keep the slot rather than closing the gap. Returns an empty list if he has
+    no game logs that season at all.
+    """
+    slots = await player_season_timeline(db, player_id, season)
+    responses: list[PlayerWeeklyResponse] = []
+    for slot in slots:
+        if slot.status == PLAYED and slot.stat is not None:
+            row = PlayerWeeklyResponse.model_validate(slot.stat)
+            row.status = PLAYED
+        else:
+            row = PlayerWeeklyResponse(
+                season=season,
+                week=slot.week,
+                team=slot.team,
+                opponent=slot.opponent,
+                status=slot.status,
+            )
+        responses.append(row)
+    return responses

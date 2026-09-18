@@ -149,6 +149,22 @@ season made fully-loaded data look missing.
   PPR trend sparkline is hidden (and not even fetched) for positions without
   fantasy scoring.
 
+### Missed games are drawn, not omitted
+- [x] **Weekly charts closed the gaps where a player didn't play** —
+  `player_weekly_stats` only holds games played, so the player-card charts drew
+  one point per game played, evenly spaced. Dalton Kincaid's 2025 came out as
+  twelve dots with his week 10 next to his week 14; the five games he missed and
+  Buffalo's bye were invisible except as skipped numbers on the axis, and the
+  regression line ran straight through them. `/api/players/{id}/weekly` now
+  returns a slot for every week of the season tagged `played` / `missed` / `bye` /
+  `inactive` (`app/services/weekly_timeline.py`), reconstructing each team's
+  schedule from the logs themselves since there is no schedule table. The charts
+  shade the absences, break the line across them, and the game-log table gets a
+  dimmed row per missed week. Applied to the weekly trend chart (player card and
+  rankings analytics column), the head-to-head comparison, and the snap-trend
+  chart. Averages and regressions still use played games only — an absence is not
+  a zero.
+
 ### Open
 - [ ] **Kicker fantasy points are ~0** — nflverse's `fantasy_points_ppr` doesn't
   include kicking scoring, so `ppr_per_game` for kickers is near zero and they
@@ -170,7 +186,7 @@ season made fully-loaded data look missing.
   season played yet" message would read better than the games-threshold wording.
 - [ ] **No frontend test runner** — `positionData.ts` and the season-selection
   logic in `useAnalyticsData` are pure functions worth unit testing, but the
-  project has no Vitest setup. Backend has 144 tests; frontend has none.
+  project has no Vitest setup. Backend has 198 tests; frontend has none.
 
 ---
 
