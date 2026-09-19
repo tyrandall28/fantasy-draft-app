@@ -172,6 +172,9 @@ class PlayerDerivedStatsResponse(BaseModel):
     targets_per_game: float | None = None
     receptions_per_game: float | None = None
     tds_per_game: float | None = None
+    pass_tds_per_game: float | None = None
+    rush_tds_per_game: float | None = None
+    int_per_game: float | None = None
     # Efficiency
     yards_per_carry: float | None = None
     yards_per_target: float | None = None

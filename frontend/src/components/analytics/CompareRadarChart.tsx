@@ -22,12 +22,13 @@ interface RadarMetric {
 const RADAR_METRICS: Record<string, RadarMetric[]> = {
   QB: [
     { key: "ppr_per_game", label: "PPR/G" },
+    { key: "pass_tds_per_game", label: "Pass TD/G" },
     { key: "pass_yards_per_game", label: "Pass Yds/G" },
-    { key: "tds_per_game", label: "TDs/G" },
+    { key: "rush_tds_per_game", label: "Rush TD/G" },
+    { key: "rush_yards_per_game", label: "Rush Yds/G" },
     { key: "completion_pct", label: "Comp%" },
     { key: "cpoe", label: "CPOE" },
     { key: "pass_epa_per_game", label: "EPA/G" },
-    { key: "rush_yards_per_game", label: "Rush Yds/G" },
   ],
   RB: [
     { key: "ppr_per_game", label: "PPR/G" },

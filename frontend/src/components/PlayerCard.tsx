@@ -264,9 +264,25 @@ function SeasonTable({ seasons, position }: { seasons: PlayerDetail["seasons"]; 
   const isK = position === "K";
   const isSkill = ["RB", "WR", "TE"].includes(position);
 
+  // Stat columns after Year and G, including the trailing PPR.
+  let statColumns = 1;
+  if (isQB) statColumns += 6;
+  if (isSkill) statColumns += position === "RB" ? 8 : 5;
+  if (isK) statColumns += 3;
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      {/* Fixed layout, same reason as the weekly table: auto layout sized each
+          column to its own content, so "Cmp/Att" dwarfed "INT" and the grid
+          came out ragged. */}
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col className="w-[10%]" />
+          <col className="w-[7%]" />
+          {Array.from({ length: statColumns }, (_, i) => (
+            <col key={i} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="text-chalk-mut border-b border-ink-600">
             <th className="text-left py-2.5 px-2 font-medium">Year</th>
@@ -274,11 +290,11 @@ function SeasonTable({ seasons, position }: { seasons: PlayerDetail["seasons"]; 
             {isQB && (
               <>
                 <th className="text-center py-2.5 px-2 font-medium">Cmp/Att</th>
+                <th className="text-center py-2.5 px-2 font-medium">Pass TD</th>
                 <th className="text-center py-2.5 px-2 font-medium">Pass Yds</th>
-                <th className="text-center py-2.5 px-2 font-medium">TD</th>
-                <th className="text-center py-2.5 px-2 font-medium">INT</th>
-                <th className="text-center py-2.5 px-2 font-medium">Rush Yds</th>
                 <th className="text-center py-2.5 px-2 font-medium">Rush TD</th>
+                <th className="text-center py-2.5 px-2 font-medium">Rush Yds</th>
+                <th className="text-center py-2.5 px-2 font-medium">INT</th>
               </>
             )}
             {isSkill && (
@@ -305,7 +321,6 @@ function SeasonTable({ seasons, position }: { seasons: PlayerDetail["seasons"]; 
               </>
             )}
             <th className="text-center py-2.5 px-2 font-medium">PPR</th>
-            <th className="text-center py-2.5 px-2 font-medium">Snp%</th>
           </tr>
         </thead>
         <tbody>
@@ -316,11 +331,11 @@ function SeasonTable({ seasons, position }: { seasons: PlayerDetail["seasons"]; 
               {isQB && (
                 <>
                   <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.pass_completions)}/{stat(s.pass_attempts)}</td>
-                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.pass_yards)}</td>
                   <td className="text-center py-2.5 px-2 text-chalk font-semibold stat-num">{stat(s.pass_tds)}</td>
-                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.interceptions)}</td>
-                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.rush_yards)}</td>
+                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.pass_yards)}</td>
                   <td className="text-center py-2.5 px-2 text-chalk font-semibold stat-num">{stat(s.rush_tds)}</td>
+                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.rush_yards)}</td>
+                  <td className="text-center py-2.5 px-2 text-chalk-dim stat-num">{stat(s.interceptions)}</td>
                 </>
               )}
               {isSkill && (
@@ -347,7 +362,6 @@ function SeasonTable({ seasons, position }: { seasons: PlayerDetail["seasons"]; 
                 </>
               )}
               <td className="text-center py-2.5 px-2 text-accent font-semibold stat-num">{s.fantasy_points_ppr?.toFixed(1) ?? "—"}</td>
-              <td className="text-center py-2.5 px-2 text-chalk-mut stat-num">{pct(s.snap_pct)}</td>
             </tr>
           ))}
         </tbody>
@@ -363,13 +377,23 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
 
   // Stat columns after Wk and Opp, so a "did not play" row can span them.
   let statColumns = 1; // PPR
-  if (isQB) statColumns += 5;
+  if (isQB) statColumns += 6;
   if (isSkill) statColumns += position === "RB" ? 7 : 4;
   if (isK) statColumns += 3;
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      {/* Fixed layout so the stat columns are all one width. Under auto layout
+          they were sized by their own content -- "C/A" holding "20/29" came out
+          far wider than "INT" holding "0" -- which read as a ragged grid. */}
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col className="w-[7%]" />
+          <col className="w-[13%]" />
+          {Array.from({ length: statColumns }, (_, i) => (
+            <col key={i} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="text-chalk-mut border-b border-ink-600">
             <th className="text-left py-2.5 px-2 font-medium">Wk</th>
@@ -377,10 +401,11 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
             {isQB && (
               <>
                 <th className="text-center py-2.5 px-2 font-medium">C/A</th>
-                <th className="text-center py-2.5 px-2 font-medium">Yds</th>
-                <th className="text-center py-2.5 px-2 font-medium">TD</th>
-                <th className="text-center py-2.5 px-2 font-medium">INT</th>
+                <th className="text-center py-2.5 px-2 font-medium">PaTD</th>
+                <th className="text-center py-2.5 px-2 font-medium">PaYd</th>
+                <th className="text-center py-2.5 px-2 font-medium">RuTD</th>
                 <th className="text-center py-2.5 px-2 font-medium">RuYd</th>
+                <th className="text-center py-2.5 px-2 font-medium">INT</th>
               </>
             )}
             {isSkill && (
@@ -443,10 +468,11 @@ function WeeklyTable({ weeks, position }: { weeks: PlayerWeekly[]; position: str
               {isQB && (
                 <>
                   <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.pass_completions)}/{stat(w.pass_attempts)}</td>
-                  <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.pass_yards)}</td>
                   <td className="text-center py-2 px-2 text-chalk font-semibold stat-num">{stat(w.pass_tds)}</td>
-                  <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.interceptions)}</td>
+                  <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.pass_yards)}</td>
+                  <td className="text-center py-2 px-2 text-chalk font-semibold stat-num">{stat(w.rush_tds)}</td>
                   <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.rush_yards)}</td>
+                  <td className="text-center py-2 px-2 text-chalk-dim stat-num">{stat(w.interceptions)}</td>
                 </>
               )}
               {isSkill && (

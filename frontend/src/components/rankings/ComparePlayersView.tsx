@@ -23,11 +23,13 @@ interface StatRowDef {
 const STATS_BY_POSITION: Record<string, StatRowDef[]> = {
   QB: [
     { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "pass_tds_per_game", label: "Pass TD/G", format: fmt2 },
     { key: "pass_yards_per_game", label: "Pass Y/G", format: fmt1 },
-    { key: "tds_per_game", label: "TDs/G", format: fmt2 },
-    { key: "completion_pct", label: "Comp%", format: fmtPct },
-    { key: "cpoe", label: "CPOE", format: fmt1 },
+    { key: "rush_tds_per_game", label: "Rush TD/G", format: fmt2 },
     { key: "rush_yards_per_game", label: "Rush Y/G", format: fmt1 },
+    { key: "completion_pct", label: "Comp%", format: fmtPct },
+    { key: "int_per_game", label: "INT/G", format: fmt2 },
+    { key: "cpoe", label: "CPOE", format: fmt1 },
     { key: "fantasy_points_ppr", label: "Total PPR", format: fmt1 },
   ],
   RB: [

@@ -844,6 +844,12 @@ async def step6_compute_derived_stats(seasons: list[int], dry_run: bool = False)
                     targets_per_game=div(ps.targets, gp),
                     receptions_per_game=div(ps.receptions, gp),
                     tds_per_game=div(total_tds, gp),
+                    # Split TDs. `or 0` matches how total_tds treats a missing
+                    # count as zero -- without it a QB whose rush_tds is NULL
+                    # would render "-" instead of 0.00 and read as no data.
+                    pass_tds_per_game=div(ps.pass_tds or 0, gp),
+                    rush_tds_per_game=div(ps.rush_tds or 0, gp),
+                    int_per_game=div(ps.interceptions or 0, gp),
                     # Efficiency
                     yards_per_carry=div(ps.rush_yards, ps.rush_attempts),
                     yards_per_target=div(ps.rec_yards, ps.targets),

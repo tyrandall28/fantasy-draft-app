@@ -25,9 +25,9 @@ const fmtPct = (v: number | null) => (v != null ? `${v.toFixed(1)}%` : "-");
 const KEY_STATS: Record<string, StatDef[]> = {
   QB: [
     { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "pass_tds_per_game", label: "Pass TD/G", format: fmt2 },
     { key: "pass_yards_per_game", label: "Pass Y/G", format: fmt1 },
-    { key: "tds_per_game", label: "TDs/G", format: fmt2 },
-    { key: "completion_pct", label: "Comp%", format: fmtPct },
+    { key: "rush_tds_per_game", label: "Rush TD/G", format: fmt2 },
   ],
   RB: [
     { key: "ppr_per_game", label: "PPR/G", format: fmt1 },

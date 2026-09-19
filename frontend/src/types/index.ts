@@ -232,6 +232,9 @@ export interface PlayerDerivedStats {
   targets_per_game: number | null;
   receptions_per_game: number | null;
   tds_per_game: number | null;
+  pass_tds_per_game: number | null;
+  rush_tds_per_game: number | null;
+  int_per_game: number | null;
   // Efficiency
   yards_per_carry: number | null;
   yards_per_target: number | null;

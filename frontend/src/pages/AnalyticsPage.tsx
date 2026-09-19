@@ -30,6 +30,8 @@ interface ColumnDef {
   key: SortField;
   label: string;
   format?: (v: number | null) => string;
+  /** Ramp runs the other way: the LOW end of this column is the good end. */
+  lowerIsBetter?: boolean;
 }
 
 type CacheKey = `${string}-${number}`;
@@ -40,14 +42,19 @@ const fmtInt = (v: number | null) => (v != null ? String(Math.round(v)) : "-");
 const fmtPct = (v: number | null) => (v != null ? `${v.toFixed(1)}%` : "-");
 
 const COLUMNS_BY_POSITION: Record<string, ColumnDef[]> = {
+  // Passing and rushing each read TD-then-yards, and the two blocks sit
+  // together, so a scan down the row tells you how a QB scores before it tells
+  // you how efficiently he does it.
   QB: [
     { key: "ppr_per_game", label: "PPR/G", format: fmt1 },
+    { key: "pass_tds_per_game", label: "Pass TD/G", format: fmt2 },
     { key: "pass_yards_per_game", label: "Pass Yds/G", format: fmt1 },
-    { key: "tds_per_game", label: "TDs/G", format: fmt2 },
+    { key: "rush_tds_per_game", label: "Rush TD/G", format: fmt2 },
+    { key: "rush_yards_per_game", label: "Rush Yds/G", format: fmt1 },
     { key: "completion_pct", label: "Comp%", format: fmtPct },
+    { key: "int_per_game", label: "INT/G", format: fmt2, lowerIsBetter: true },
     { key: "cpoe", label: "CPOE", format: fmt1 },
     { key: "pass_epa_per_game", label: "EPA/G", format: fmt2 },
-    { key: "rush_yards_per_game", label: "Rush Yds/G", format: fmt1 },
     { key: "fantasy_points_ppr", label: "Total PPR", format: fmt1 },
   ],
   RB: [
@@ -97,15 +104,17 @@ const DEFAULT_SORT_BY_POSITION: Record<string, SortField> = {
 
 const SMALL_SAMPLE_THRESHOLD = 8;
 
-// Brightness ramp for the sorted column: the top of the column reads as elite
-// and the tail recedes, so a glance at the grid tells you where the value sits
-// without reading the digits. Every metric in this table is higher-is-better,
-// so one mapping covers all of them.
+// Brightness ramp for the sorted column: the good end of the column reads as
+// elite and the tail recedes, so a glance at the grid tells you where the value
+// sits without reading the digits. Most metrics here are higher-is-better, but
+// not all -- INT/G is won by the smallest number, and ramping it like the rest
+// would light up the worst quarterbacks. `invert` flips which end is bright.
 const CHALK_LOW = [107, 104, 98]; // --color-chalk-mut
 const CHALK_HIGH = [237, 234, 227]; // --color-chalk
 
-function heatColor(v: number, min: number, max: number): string {
-  const t = max > min ? (v - min) / (max - min) : 1;
+function heatColor(v: number, min: number, max: number, invert = false): string {
+  const raw = max > min ? (v - min) / (max - min) : 1;
+  const t = invert ? 1 - raw : raw;
   const [r, g, b] = CHALK_LOW.map((lo, i) => Math.round(lo + (CHALK_HIGH[i] - lo) * t));
   return `rgb(${r}, ${g}, ${b})`;
 }
@@ -611,7 +620,21 @@ export default function AnalyticsPage() {
       {activeTab === "rankings" && (
       <div className="panel rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-0">
+          {/* table-fixed, not auto. Auto layout hands every column a share of
+              the slack in proportion to its content, so "Rush Yds/G" ended up
+              visibly wider than "CPOE" and the last pair looked mismatched.
+              Fixed layout plus this colgroup gives the identity column a set
+              share and splits the rest evenly, so the stat grid reads as one
+              rhythm at any column count. min-w keeps the widest header from
+              being crushed on a narrow window -- it scrolls instead. */}
+          <table className="w-full table-fixed border-separate border-spacing-0 min-w-[1400px]">
+            <colgroup>
+              <col className="w-[20%]" />
+              {showTrend && <col className="w-[6%]" />}
+              {columns.map((col) => (
+                <col key={col.key} />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 {/* Sticky with the identity cells below it, so the anchor
@@ -635,7 +658,7 @@ export default function AnalyticsPage() {
                     <th
                       key={col.key}
                       onClick={() => handleSort(col.key)}
-                      className={`bg-ink-800 text-right text-xs font-medium px-4 py-3 cursor-pointer select-none whitespace-nowrap border-b border-ink-600 transition-colors ${
+                      className={`bg-ink-800 text-right text-xs font-medium px-3 py-3 cursor-pointer select-none whitespace-nowrap border-b border-ink-600 transition-colors ${
                         active ? "text-accent" : "text-chalk-mut hover:text-chalk-dim"
                       }`}
                     >
@@ -715,11 +738,12 @@ export default function AnalyticsPage() {
                           <div className="min-w-0">
                             <button
                               onClick={() => openPlayerCard(p.player_id)}
-                              className="block text-chalk text-[15px] font-medium leading-tight hover:underline underline-offset-4 decoration-chalk-mut text-left"
+                              title={p.full_name}
+                              className="block w-full truncate text-chalk text-[15px] font-medium leading-tight hover:underline underline-offset-4 decoration-chalk-mut text-left"
                             >
                               {p.full_name}
                             </button>
-                            <p className="text-chalk-mut text-xs mt-1 leading-none">
+                            <p className="truncate text-chalk-mut text-xs mt-1 leading-none">
                               {p.nfl_team}
                               {rank != null && <> &middot; {position}{rank}</>}
                               {" "}&middot;{" "}
@@ -740,8 +764,12 @@ export default function AnalyticsPage() {
                       {columns.map((col) => {
                         const val = p[col.key] as number | null;
                         const active = sortBy === col.key;
+                        // No bar on a lower-is-better column: length reads as
+                        // "more of a good thing", and on INT/G the longest bar
+                        // would belong to the worst quarterback. The ramp still
+                        // applies -- it just runs the other way.
                         const fill =
-                          active && sortDomain?.barMax != null && val != null
+                          active && !col.lowerIsBetter && sortDomain?.barMax != null && val != null
                             ? Math.max(0, Math.min(1, val / sortDomain.barMax)) * 100
                             : 0;
                         // Only the sorted column ramps. Running it on all ten
@@ -749,12 +777,12 @@ export default function AnalyticsPage() {
                         // you're actually reading from standing out.
                         const ramp =
                           active && sortDomain && val != null
-                            ? heatColor(val, sortDomain.min, sortDomain.max)
+                            ? heatColor(val, sortDomain.min, sortDomain.max, col.lowerIsBetter)
                             : undefined;
                         return (
                           <td
                             key={col.key}
-                            className={`relative text-right px-4 py-4 stat-num text-sm border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors ${
+                            className={`relative text-right px-3 py-4 stat-num text-sm border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors ${
                               active ? "text-chalk" : "text-chalk-dim"
                             }`}
                           >

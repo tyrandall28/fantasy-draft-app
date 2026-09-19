@@ -218,6 +218,9 @@ class PlayerDerivedStats(Base):
     targets_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
     receptions_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
     tds_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pass_tds_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rush_tds_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
+    int_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Efficiency stats
     yards_per_carry: Mapped[float | None] = mapped_column(Float, nullable=True)
