@@ -225,6 +225,18 @@ check gets ignored, and a `continue-on-error` check is worse than none.
   have no coverage. The tool functions are pure DB queries and easy to test;
   the agentic loop needs a stubbed client.
 
+### Analytics metrics
+- [ ] **`td_rate` is a duplicate of `tds_per_game` under a misleading name** —
+  `ingest_stats.py` computes both as `div(total_tds, gp)`, so they are the same
+  number in every row. The name promises a rate per opportunity, and it is
+  exposed as a sortable column on the analytics table *and* offered to the AI
+  assistant as "touchdown rate" (`assistant_tools.METRICS`), so a question like
+  "who has the best TD rate?" is silently answered with TDs per game. Either
+  make it a real rate (TDs per attempt for QBs, per touch for skill positions)
+  or drop the column and its `METRICS` entry — but not half of it, since both
+  the sort whitelist in `api/analytics.py` and the assistant metric map have to
+  agree with whatever the ingester writes.
+
 ---
 
 ## UI / UX Polish
