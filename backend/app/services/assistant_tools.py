@@ -12,8 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.models.player import Player, PlayerDerivedStats, PlayerWeeklyStat
+from app.models.player import Player, PlayerDerivedStats
 from app.nfl_season import REGULAR_SEASON_WEEKS, latest_completed_season
+from app.services import season_coverage
 
 # Valid positions and metrics. Mirrors app/api/analytics.py — the metric enum is
 # what keeps the model from ever requesting a column that doesn't exist.
@@ -85,15 +86,6 @@ async def _latest_season(db: AsyncSession) -> int:
     return result.scalar() or latest_completed_season()
 
 
-async def _weeks_played(db: AsyncSession, season: int) -> int | None:
-    """Weeks of the given season that have game logs, or None if none do."""
-    return (
-        await db.execute(
-            select(func.max(PlayerWeeklyStat.week)).where(PlayerWeeklyStat.season == season)
-        )
-    ).scalar()
-
-
 async def get_data_coverage(db: AsyncSession) -> dict:
     """What seasons the database actually holds, and how complete each one is.
 
@@ -102,24 +94,29 @@ async def get_data_coverage(db: AsyncSession) -> dict:
     That went stale the moment the 2026 season kicked off, and a stale coverage
     claim makes the assistant confidently wrong about what it can see. Derived
     from the data instead.
+
+    `min_team_games` counts games every team has played, not the highest week
+    number on file: refresh mid-week and only the Thursday teams have the new
+    week, so `max(week)` would have the assistant claim a week of results that
+    thirty teams have not played.
     """
-    rows = (
-        await db.execute(
-            select(
-                PlayerWeeklyStat.season,
-                func.max(PlayerWeeklyStat.week),
-            )
-            .group_by(PlayerWeeklyStat.season)
-            .order_by(PlayerWeeklyStat.season)
-        )
-    ).all()
+    coverage = await season_coverage.coverage_by_season(db)
     seasons = [
         {
-            "season": season,
-            "weeks_played": weeks or 0,
-            "is_complete": bool(weeks and weeks >= REGULAR_SEASON_WEEKS),
+            "season": cov.season,
+            "min_team_games": cov.min_team_games,
+            "is_complete": cov.is_complete,
         }
-        for season, weeks in rows
+        | (
+            {
+                "partial_week": cov.latest_week,
+                "teams_played_in_partial_week": cov.teams_in_latest_week,
+                "total_teams": cov.total_teams,
+            }
+            if cov.has_partial_week
+            else {}
+        )
+        for cov in sorted(coverage.values(), key=lambda c: c.season)
     ]
     complete = [s["season"] for s in seasons if s["is_complete"]]
     in_progress = [s for s in seasons if not s["is_complete"]]
@@ -205,13 +202,15 @@ async def get_stat_leaders(
     limit = max(1, min(limit, 50))
 
     # A partially played season can't satisfy a games floor higher than the
-    # number of weeks played -- in week 1 everyone has one game, so the default
-    # of 3 would return an empty leaderboard and the assistant would report "no
-    # data" for a season that is fully loaded. Clamp, and tell the model the
-    # sample is small so it can say so.
-    weeks = await _weeks_played(db, season)
-    if weeks is not None:
-        min_games = min(min_games, weeks)
+    # games its teams have played -- in week 1 everyone has one game, so the
+    # default of 3 would return an empty leaderboard and the assistant would
+    # report "no data" for a season that is fully loaded. Clamp to the
+    # least-played team rather than to `max(week)`, which treats a Thursday
+    # night game as a full week and drops every other team's players. Then tell
+    # the model the sample is small so it can say so.
+    floor = await season_coverage.min_team_games(db, season)
+    if floor is not None:
+        min_games = min(min_games, floor)
 
     col = getattr(PlayerDerivedStats, metric)
     order = col.desc().nullslast() if sort_dir != "asc" else col.asc().nullsfirst()
@@ -254,10 +253,10 @@ async def get_stat_leaders(
         "min_games_applied": min_games,
         "leaders": leaders,
     }
-    if weeks is not None and weeks < REGULAR_SEASON_WEEKS:
+    if floor is not None and floor < REGULAR_SEASON_WEEKS:
         result["note"] = (
-            f"The {season} season is still in progress -- only {weeks} week(s) have "
-            f"been played, so these are small-sample numbers. Say so in your answer."
+            f"The {season} season is still in progress -- every team has played only "
+            f"{floor} game(s), so these are small-sample numbers. Say so in your answer."
         )
     return result
 

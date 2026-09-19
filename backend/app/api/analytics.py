@@ -4,22 +4,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DB
-from app.models.player import Player, PlayerDerivedStats, PlayerWeeklyStat
+from app.models.player import Player, PlayerDerivedStats
 from app.nfl_season import REGULAR_SEASON_WEEKS
 from app.schemas.player import PlayerDerivedStatsResponse
-from app.services import recent_form
+from app.services import recent_form, season_coverage
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
-
-
-async def _weeks_played(db: DB, season: int) -> int | None:
-    """How many weeks of the given season have game logs. None if the season
-    hasn't started (or wasn't ingested)."""
-    return (
-        await db.execute(
-            select(func.max(PlayerWeeklyStat.week)).where(PlayerWeeklyStat.season == season)
-        )
-    ).scalar()
 
 VALID_POSITIONS = {"QB", "RB", "WR", "TE", "K"}
 VALID_SORT_FIELDS = {
@@ -57,12 +47,14 @@ async def get_position_rankings(
         limit = 200
 
     # `min_games` filters out small-sample noise, but it can't ask for more games
-    # than the season has had. In week 1 every player has games_played=1, so the
-    # default of 3 would match nothing and the page would look empty even though
-    # the data is fully loaded. Clamp to the weeks actually played.
-    weeks = await _weeks_played(db, season)
-    if weeks is not None:
-        min_games = min(min_games, weeks)
+    # than the season has supplied. In week 1 every player has games_played=1, so
+    # the default of 3 would match nothing and the page would look empty even
+    # though the data is fully loaded. Clamp to the least-played team's games --
+    # not to `max(week)`, which counts a Thursday night game as a whole week and
+    # hides everyone who hasn't played yet. See app.services.season_coverage.
+    floor = await season_coverage.min_team_games(db, season)
+    if floor is not None:
+        min_games = min(min_games, floor)
 
     col = getattr(PlayerDerivedStats, sort_by)
     order = col.desc().nullslast() if sort_dir == "desc" else col.asc().nullsfirst()
@@ -211,16 +203,16 @@ async def get_seasons_detail(db: DB):
         of games can't establish a replacement baseline.
     Returning completeness here lets each caller choose correctly from one
     request, instead of guessing from the season number.
+
+    Completeness is measured per team rather than by the highest week number --
+    a refresh run mid-week sees only the Thursday game, and calling that "week 2
+    played" is how the leaderboard came to hide thirty teams. `min_team_games`
+    is the honest floor; `latest_week` and `teams_in_latest_week` describe the
+    week still being played, as counts rather than a verdict, because a week
+    with 26 of 32 teams is either a finished bye week or a Sunday in progress
+    and there is no schedule table here to tell them apart.
     """
-    weeks_by_season = dict(
-        (
-            await db.execute(
-                select(PlayerWeeklyStat.season, func.max(PlayerWeeklyStat.week)).group_by(
-                    PlayerWeeklyStat.season
-                )
-            )
-        ).all()
-    )
+    coverage = await season_coverage.coverage_by_season(db)
     rows = (
         await db.execute(
             select(
@@ -232,15 +224,19 @@ async def get_seasons_detail(db: DB):
         )
     ).all()
 
-    return [
-        {
-            "season": season,
-            "weeks_played": weeks_by_season.get(season) or 0,
-            "max_games_played": max_games or 0,
-            "is_complete": bool(
-                weeks_by_season.get(season) and weeks_by_season[season] >= REGULAR_SEASON_WEEKS
-            ),
-            "regular_season_weeks": REGULAR_SEASON_WEEKS,
-        }
-        for season, max_games in rows
-    ]
+    out = []
+    for season, max_games in rows:
+        cov = coverage.get(season)
+        out.append(
+            {
+                "season": season,
+                "min_team_games": cov.min_team_games if cov else 0,
+                "latest_week": cov.latest_week if cov else 0,
+                "teams_in_latest_week": cov.teams_in_latest_week if cov else 0,
+                "total_teams": cov.total_teams if cov else 0,
+                "max_games_played": max_games or 0,
+                "is_complete": bool(cov and cov.is_complete),
+                "regular_season_weeks": REGULAR_SEASON_WEEKS,
+            }
+        )
+    return out

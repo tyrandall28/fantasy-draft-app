@@ -70,7 +70,10 @@
 - [ ] **Lock down Alembic migrations** — no more drop/recreate once real users exist
 - [ ] **Environment-based config** — dev vs staging vs prod settings
 - [ ] **Scheduled refresh** — Cloud Scheduler hitting `scripts.refresh_data`
-  weekly in-season, once the app is deployed
+  in-season, once the app is deployed. Design and exact commands in
+  `docs/scheduled-refresh.md`, which argues for daily rather than weekly.
+  Partial weeks are handled: `app/services/season_coverage.py` measures coverage
+  per team, so a mid-week refresh no longer hides the teams that haven't played.
 
 ---
 

@@ -63,11 +63,21 @@ def _coverage_block(coverage: dict) -> str:
     in_progress = coverage.get("in_progress")
     if in_progress:
         lines.append(
-            f"- The {in_progress['season']} season is IN PROGRESS: only "
-            f"{in_progress['weeks_played']} week(s) played so far. Data for it is real "
-            f"but a small sample — always mention how many weeks it covers, and never "
+            f"- The {in_progress['season']} season is IN PROGRESS: every team has played "
+            f"only {in_progress['min_team_games']} game(s) so far. Data for it is real "
+            f"but a small sample — always mention how many games it covers, and never "
             f"present it as a final season result."
         )
+        # A refresh run mid-week leaves one week partly loaded. Say so, or the
+        # assistant will quote a leaderboard where two teams have an extra game.
+        if in_progress.get("partial_week"):
+            lines.append(
+                f"- Week {in_progress['partial_week']} of {in_progress['season']} is only "
+                f"partly loaded: {in_progress['teams_played_in_partial_week']} of "
+                f"{in_progress['total_teams']} teams have played it. Players on those "
+                f"teams have one more game than everyone else, so season totals are not "
+                f"comparable across teams right now — say so if it affects the answer."
+            )
         lines.append(
             f"- There is no data for seasons after {in_progress['season']}. If asked, say so."
         )

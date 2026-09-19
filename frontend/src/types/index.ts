@@ -81,10 +81,22 @@ export interface PlayerSeason {
  * `is_complete` matters: an in-progress season's per-game rates come off a
  * one- or two-game sample, which is fine to explore but useless as a draft
  * baseline.
+ *
+ * Coverage is counted per team, not by the highest week number on file.
+ * Refresh the data on a Friday and only Thursday night's two teams have a
+ * week-2 row, so `latest_week` is 2 while `min_team_games` is still 1 -- and
+ * it's `min_team_games` that says what every player has actually had a chance
+ * to do. `teams_in_latest_week < total_teams` means that last week is only
+ * partly loaded.
  */
 export interface SeasonInfo {
   season: number;
-  weeks_played: number;
+  /** Games played by the least-played team: the honest sample floor. */
+  min_team_games: number;
+  /** Highest week with any game log, which may be only partly loaded. */
+  latest_week: number;
+  teams_in_latest_week: number;
+  total_teams: number;
   max_games_played: number;
   is_complete: boolean;
   regular_season_weeks: number;

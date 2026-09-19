@@ -112,7 +112,10 @@ function heatColor(v: number, min: number, max: number): string {
 
 export default function AnalyticsPage() {
   const [position, setPosition] = useState<string>("QB");
-  const [season, setSeason] = useState<number>(2025);
+  // Null until /seasons/detail answers. Seeding this with a guess fired a
+  // throwaway request for that season, and whichever of the two responses
+  // landed last won -- the selector said 2026 while the table showed 2025.
+  const [season, setSeason] = useState<number | null>(null);
   const [seasonInfo, setSeasonInfo] = useState<SeasonInfo[]>([]);
   const [sortBy, setSortBy] = useState<SortField>("ppr_per_game");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -146,9 +149,16 @@ export default function AnalyticsPage() {
     });
   }, []);
 
-  // Fetch data when position or season changes (NOT sort)
+  // Fetch data when position or season changes (NOT sort).
+  //
+  // `stale` guards the response, not just the mount: switch season or position
+  // while a request is in flight and the slower one used to win, painting one
+  // season's numbers under another season's heading. Cache the result either
+  // way -- it's still valid for its own key -- but only the live request gets
+  // to set what's on screen.
   useEffect(() => {
     if (!season) return;
+    let stale = false;
     const key: CacheKey = `${position}-${season}`;
     const cached = cache.current.get(key);
     if (cached) {
@@ -167,10 +177,17 @@ export default function AnalyticsPage() {
     apiFetch<PlayerDerivedStats[]>(`/api/analytics/position-rankings?${params}`)
       .then((data) => {
         cache.current.set(key, data);
-        setRawData(data);
+        if (!stale) setRawData(data);
       })
-      .catch(() => setRawData([]))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!stale) setRawData([]);
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
   }, [position, season]);
 
   // Fetch recent form after rawData loads. Skipped entirely when the trend
@@ -179,6 +196,7 @@ export default function AnalyticsPage() {
   // it sits beside.
   useEffect(() => {
     if (rawData.length === 0 || !showTrend || !season) return;
+    let stale = false;
     const ids = rawData.map((p) => p.player_id);
     const cacheKey = `${season}:${[...ids].sort((a, b) => a - b).join(",")}`;
     const cached = formCache.current.get(cacheKey);
@@ -191,9 +209,14 @@ export default function AnalyticsPage() {
     )
       .then((data) => {
         formCache.current.set(cacheKey, data);
-        setForms(data);
+        if (!stale) setForms(data);
       })
-      .catch(() => setForms({}));
+      .catch(() => {
+        if (!stale) setForms({});
+      });
+    return () => {
+      stale = true;
+    };
   }, [rawData, showTrend, season]);
 
   // Sort client-side
@@ -323,7 +346,7 @@ export default function AnalyticsPage() {
         </div>
 
         <select
-          value={season}
+          value={season ?? ""}
           onChange={(e) => setSeason(Number(e.target.value))}
           className="bg-ink-800 border border-ink-600 text-chalk-dim text-sm rounded-lg px-3 py-1.5"
         >
@@ -366,18 +389,34 @@ export default function AnalyticsPage() {
 
       {/* In-progress season notice. Early in a season every per-game rate comes
           off a one- or two-game sample, so the leaderboard is mostly noise —
-          say so rather than presenting it as settled. */}
-      {currentSeasonInfo && !currentSeasonInfo.is_complete && currentSeasonInfo.weeks_played > 0 && (
+          say so rather than presenting it as settled.
+
+          The two counts are separate on purpose. Refreshing mid-week loads the
+          Thursday game and nothing else, so "data through week 2" would be true
+          of two teams and wrong about the other thirty. State what every team
+          has played, then the partial week as a raw count — which reads
+          correctly during a bye week too, where a finished week legitimately
+          has 26 of 32 teams in it. */}
+      {currentSeasonInfo && !currentSeasonInfo.is_complete && currentSeasonInfo.min_team_games > 0 && (
         <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-caution/20 bg-caution/5 px-4 py-3">
           <span className="text-caution text-sm leading-5">●</span>
           <p className="text-sm text-chalk-dim leading-5">
             <span className="font-medium text-caution">
               {currentSeasonInfo.season} season in progress
             </span>{" "}
-            — data through week {currentSeasonInfo.weeks_played} of{" "}
-            {currentSeasonInfo.regular_season_weeks}. Per-game averages come from as
-            few as {currentSeasonInfo.max_games_played}{" "}
-            {currentSeasonInfo.max_games_played === 1 ? "game" : "games"}, so rankings
+            — every team has played {currentSeasonInfo.min_team_games} of{" "}
+            {currentSeasonInfo.regular_season_weeks} games.
+            {currentSeasonInfo.teams_in_latest_week < currentSeasonInfo.total_teams && (
+              <>
+                {" "}
+                Week {currentSeasonInfo.latest_week} is partly loaded:{" "}
+                {currentSeasonInfo.teams_in_latest_week} of{" "}
+                {currentSeasonInfo.total_teams} teams have played it, so those
+                players carry an extra game.
+              </>
+            )}{" "}
+            Per-game averages come from as few as {currentSeasonInfo.min_team_games}{" "}
+            {currentSeasonInfo.min_team_games === 1 ? "game" : "games"}, so rankings
             will swing a lot week to week.{" "}
             {seasonInfo.length > 1 && (
               <>
@@ -623,7 +662,9 @@ export default function AnalyticsPage() {
               ) : players.length === 0 ? (
                 <tr>
                   <td colSpan={columnCount} className="text-center text-chalk-dim py-16 text-base">
-                    {currentSeasonInfo && currentSeasonInfo.weeks_played === 0 ? (
+                    {!season ? (
+                      "Loading..."
+                    ) : currentSeasonInfo && currentSeasonInfo.latest_week === 0 ? (
                       <>
                         No {season} game data has been ingested yet.
                         <span className="block mt-1 text-sm text-chalk-mut">

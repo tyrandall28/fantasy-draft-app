@@ -33,6 +33,7 @@ from app.nfl_season import (
     current_nfl_season,
     latest_completed_season,
 )
+from app.services import season_coverage
 from rankings_ingester.ingest_stats import FANTASY_POSITIONS
 
 OK, WARN, FAIL, INFO = "OK", "WARN", "FAIL", "INFO"
@@ -214,8 +215,25 @@ async def check_datasets(db, rep: Report) -> dict:
             )
         ).all()
         facts["weekly_weeks"] = {r[0]: (r[1], r[2], r[3]) for r in rows}
+        # ... and a partly-loaded week inside it. Refreshing on a Friday pulls
+        # Thursday night and nothing else, which used to read here as a whole
+        # new week while thirty teams were still a game behind.
+        coverage = await season_coverage.coverage_by_season(db)
+        facts["partial_weeks"] = {
+            c.season: (c.latest_week, c.teams_in_latest_week, c.total_teams)
+            for c in coverage.values()
+            if c.has_partial_week
+        }
         for season, lo, hi, n in rows:
-            print(f"          season {season}: weeks {lo}-{hi} ({n} distinct)")
+            line = f"          season {season}: weeks {lo}-{hi} ({n} distinct)"
+            c = coverage.get(season)
+            if c and c.has_partial_week:
+                line += (
+                    f" -- week {c.latest_week} partly loaded,"
+                    f" {c.teams_in_latest_week}/{c.total_teams} teams;"
+                    f" every team has played {c.min_team_games}"
+                )
+            print(line)
 
     # -- season aggregates
     seasons_rows = await count(PlayerSeason)
