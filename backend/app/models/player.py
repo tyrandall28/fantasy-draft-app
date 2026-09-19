@@ -228,7 +228,6 @@ class PlayerDerivedStats(Base):
     yards_per_reception: Mapped[float | None] = mapped_column(Float, nullable=True)
     catch_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     completion_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
-    td_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Advanced stats
     pass_epa_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)

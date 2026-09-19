@@ -241,7 +241,6 @@ export interface PlayerDerivedStats {
   yards_per_reception: number | null;
   catch_rate: number | null;
   completion_pct: number | null;
-  td_rate: number | null;
   // Advanced
   pass_epa_per_game: number | null;
   rush_epa_per_game: number | null;

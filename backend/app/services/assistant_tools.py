@@ -41,7 +41,6 @@ METRICS: dict[str, str] = {
     "yards_per_reception": "yards per reception",
     "catch_rate": "catch rate (%)",
     "completion_pct": "completion percentage",
-    "td_rate": "touchdown rate",
     "pass_epa_per_game": "passing EPA per game",
     "rush_epa_per_game": "rushing EPA per game",
     "cpoe": "completion percentage over expected",

@@ -226,16 +226,27 @@ check gets ignored, and a `continue-on-error` check is worse than none.
   the agentic loop needs a stubbed client.
 
 ### Analytics metrics
-- [ ] **`td_rate` is a duplicate of `tds_per_game` under a misleading name** —
-  `ingest_stats.py` computes both as `div(total_tds, gp)`, so they are the same
-  number in every row. The name promises a rate per opportunity, and it is
-  exposed as a sortable column on the analytics table *and* offered to the AI
-  assistant as "touchdown rate" (`assistant_tools.METRICS`), so a question like
-  "who has the best TD rate?" is silently answered with TDs per game. Either
-  make it a real rate (TDs per attempt for QBs, per touch for skill positions)
-  or drop the column and its `METRICS` entry — but not half of it, since both
-  the sort whitelist in `api/analytics.py` and the assistant metric map have to
-  agree with whatever the ingester writes.
+- [x] **`td_rate` was a duplicate of `tds_per_game` under a misleading name** —
+  `ingest_stats.py` computed both as `div(total_tds, gp)`, so they were the same
+  number in every row while the name promised a rate per opportunity. It was
+  never a visible column (no column def referenced it, and it wasn't in the
+  assistant's `_PROFILE_FIELDS`), but it *was* in the analytics sort whitelist
+  and in `assistant_tools.METRICS` as "touchdown rate", which put it in the
+  `get_stat_leaders` tool enum — so "who has the best TD rate?" was silently
+  answered with TDs per game. Dropped whole: migration `c4a92f1db730` plus the
+  model, schema, TS type, sort whitelist, `METRICS` entry and the ingester line.
+  Nothing was lost — `tds_per_game` carries the same number under the right name.
+
+### Open
+- [ ] **A real TD efficiency metric** — the thing `td_rate` pretended to be:
+  TDs per opportunity, with a position-dependent denominator (pass TDs per
+  attempt for QBs, TDs per touch for RBs, TDs per target for WR/TE). All the
+  inputs already exist on `player_seasons`. Wants explicitly named columns
+  (`pass_td_rate` / `td_per_touch` / `td_per_target`) rather than one
+  overloaded `td_rate`, because `get_stat_leaders` can be called without a
+  position filter and a single column would rank QB TDs/attempt against RB
+  TDs/touch. Needs a migration, a derived-stats re-run, and a decision about
+  whether the columns become visible on the analytics table.
 
 ---
 

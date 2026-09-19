@@ -181,7 +181,6 @@ class PlayerDerivedStatsResponse(BaseModel):
     yards_per_reception: float | None = None
     catch_rate: float | None = None
     completion_pct: float | None = None
-    td_rate: float | None = None
     # Advanced
     pass_epa_per_game: float | None = None
     rush_epa_per_game: float | None = None

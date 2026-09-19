@@ -856,7 +856,6 @@ async def step6_compute_derived_stats(seasons: list[int], dry_run: bool = False)
                     yards_per_reception=div(ps.rec_yards, ps.receptions),
                     catch_rate=round((ps.receptions / ps.targets) * 100, 1) if ps.targets and ps.receptions and ps.targets > 0 else None,
                     completion_pct=round((ps.pass_completions / ps.pass_attempts) * 100, 1) if ps.pass_attempts and ps.pass_completions and ps.pass_attempts > 0 else None,
-                    td_rate=div(total_tds, gp),
                     # Advanced
                     pass_epa_per_game=div(ps.pass_epa, gp),
                     rush_epa_per_game=div(ps.rush_epa, gp),
