@@ -32,6 +32,14 @@ interface ColumnDef {
   format?: (v: number | null) => string;
   /** Ramp runs the other way: the LOW end of this column is the good end. */
   lowerIsBetter?: boolean;
+  /**
+   * Metric is signed by definition -- zero is a meaningful midpoint, not an
+   * empty bar (EPA, CPOE). Gets no bar, because length drawn from an
+   * arbitrary baseline reads as a magnitude it isn't. Declared per column
+   * rather than inferred from the data: a metric that merely *happens* to
+   * contain a negative this week (one backup QB's PPR/G) is still a magnitude.
+   */
+  signed?: boolean;
 }
 
 type CacheKey = `${string}-${number}`;
@@ -53,8 +61,8 @@ const COLUMNS_BY_POSITION: Record<string, ColumnDef[]> = {
     { key: "rush_yards_per_game", label: "Rush Yds/G", format: fmt1 },
     { key: "completion_pct", label: "Comp%", format: fmtPct },
     { key: "int_per_game", label: "INT/G", format: fmt2, lowerIsBetter: true },
-    { key: "cpoe", label: "CPOE", format: fmt1 },
-    { key: "pass_epa_per_game", label: "EPA/G", format: fmt2 },
+    { key: "cpoe", label: "CPOE", format: fmt1, signed: true },
+    { key: "pass_epa_per_game", label: "EPA/G", format: fmt2, signed: true },
     { key: "fantasy_points_ppr", label: "Total PPR", format: fmt1 },
   ],
   RB: [
@@ -274,9 +282,11 @@ export default function AnalyticsPage() {
   const ranks = useMemo(() => positionalRanks(rawData, position), [rawData, position]);
 
   // Range of the sorted column, used for both the bar and the brightness ramp.
-  // `barMax` is null for metrics that can go negative (CPOE, EPA): a bar drawn
-  // from an arbitrary baseline reads as a magnitude it isn't. The ramp still
-  // applies there, since relative standing is meaningful either way.
+  // `barMax` is null only for columns declared `signed` (CPOE, EPA), where a
+  // bar would misread as magnitude. It is NOT keyed off the data containing a
+  // negative: a single backup QB at -0.38 PPR/G used to null this out and strip
+  // the bars from every row of the column. Negatives clamp to an empty bar
+  // instead. The ramp always applies -- relative standing is meaningful either way.
   const sortDomain = useMemo(() => {
     const vals = players
       .map((p) => p[sortBy] as number | null)
@@ -284,8 +294,9 @@ export default function AnalyticsPage() {
     if (vals.length === 0) return null;
     const min = Math.min(...vals);
     const max = Math.max(...vals);
-    return { min, max, barMax: min < 0 || max <= 0 ? null : max };
-  }, [players, sortBy]);
+    const signed = columns.find((c) => c.key === sortBy)?.signed ?? false;
+    return { min, max, barMax: signed || max <= 0 ? null : max };
+  }, [players, sortBy, columns]);
 
   // Early in a season every player is below the small-sample threshold, so
   // flagging them all says nothing -- it just paints the page amber. The
@@ -630,7 +641,11 @@ export default function AnalyticsPage() {
           <table className="w-full table-fixed border-separate border-spacing-0 min-w-[1400px]">
             <colgroup>
               <col className="w-[20%]" />
-              {showTrend && <col className="w-[6%]" />}
+              {/* Wide enough for the 84px sparkline plus the cell's px-4: at
+                  the 1400px floor 9% is 126px, leaving a 94px content box. At
+                  6% the SVG overflowed its cell by ~16px a side and bled into
+                  the next column. */}
+              {showTrend && <col className="w-[9%]" />}
               {columns.map((col) => (
                 <col key={col.key} />
               ))}
@@ -787,11 +802,21 @@ export default function AnalyticsPage() {
                             }`}
                           >
                             {fill > 0 && (
+                              // Track, then fill. The fill is a percentage of
+                              // the track, not of the cell, so a 100% bar stops
+                              // short of both edges instead of running flush
+                              // into the neighbouring column -- at the left edge
+                              // that meant painting over the Form sparkline's
+                              // most recent game.
                               <span
                                 aria-hidden
-                                className="absolute inset-y-2 right-0 bg-accent/15 rounded-sm pointer-events-none"
-                                style={{ width: `${fill}%` }}
-                              />
+                                className="absolute inset-y-2 left-1 right-1 pointer-events-none"
+                              >
+                                <span
+                                  className="absolute inset-y-0 right-0 bg-accent/15 rounded-sm"
+                                  style={{ width: `${fill}%` }}
+                                />
+                              </span>
                             )}
                             <span
                               className={`relative ${active ? "font-medium" : ""}`}
