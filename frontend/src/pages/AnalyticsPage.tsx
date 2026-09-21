@@ -11,14 +11,16 @@ import { hasFantasyPoints, positionNotice } from "../lib/positionData";
 import { isTierSort, positionalRanks, tierBandAt } from "../lib/tiers";
 import type { PlayerDerivedStats, RecentFormData, SeasonInfo } from "../types";
 
+// Leads with the part the "Last 8" header can't carry: it's eight games the
+// *team* played, which is why a missed game still takes a slot.
 const TREND_HELP =
-  "Recent form: PPR in the last 8 games this player's team played, rolling " +
-  "back into the previous season when the current one is shorter. Green or " +
-  "red means the window averages more than 12% above or below his own " +
-  "baseline (the ~17 team games before it). A red x is a game his team " +
-  "played and he did not; those are excluded from the average, not counted " +
-  "as zeros. The dashed line is his baseline. Week 18 is skipped -- playoff " +
-  "teams rest starters.";
+  "PPR over the last 8 games this player's team played. Missed games still " +
+  "take a slot. Rolls back into the " +
+  "previous season when the current one is shorter. Green or red means the " +
+  "window averages more than 12% above or below his own baseline (the ~17 " +
+  "team games before it). A red x is a game his team played and he did not; " +
+  "those are excluded from the average, not counted as zeros. The dashed " +
+  "line is his baseline. Week 18 is skipped.";
 
 type ViewTab = "rankings" | "boom-bust" | "compare" | "target-air";
 
@@ -663,7 +665,7 @@ export default function AnalyticsPage() {
                     title={TREND_HELP}
                   >
                     <span className="border-b border-dotted border-chalk-mut cursor-help">
-                      Form
+                      Last 8
                     </span>
                   </th>
                 )}
@@ -677,14 +679,22 @@ export default function AnalyticsPage() {
                         active ? "text-accent" : "text-chalk-mut hover:text-chalk-dim"
                       }`}
                     >
-                      {col.label}
+                      {/* Ahead of the label, not after it. These headers are
+                          right-aligned over right-aligned numbers, and the
+                          arrow's box is reserved on every column so the header
+                          doesn't jump when you sort. Sitting after the label
+                          that reserved box pushed the *visible* text ~13px in
+                          from the edge the numbers align to, so every unsorted
+                          column read as misaligned. In front, the same
+                          reservation falls into the column's left whitespace. */}
                       <span
-                        className={`ml-1 text-[9px] align-middle ${
+                        className={`mr-1 text-[9px] align-middle ${
                           active ? "text-accent" : "text-transparent"
                         }`}
                       >
                         {sortDir === "desc" ? "▼" : "▲"}
                       </span>
+                      {col.label}
                     </th>
                   );
                 })}
