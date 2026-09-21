@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { askAssistant, type ChatMessage, type TraceStep } from "../api/assistant";
+import AnswerMarkdown from "../components/assistant/AnswerMarkdown";
 
 const SUGGESTIONS = [
   "Who led WRs in touchdowns in 2024?",
@@ -158,10 +159,13 @@ export default function AssistantPage() {
               className={
                 m.role === "user"
                   ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-4 py-2.5 text-sm text-chalk"
-                  : "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-chalk-dim"
+                  : "max-w-[85%] overflow-hidden rounded-2xl rounded-bl-sm border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-chalk-dim"
               }
             >
-              {m.content}
+              {/* The user's own text is literal -- pre-wrap keeps the line breaks
+                  they typed. The model's is markdown, and pre-wrap on markdown
+                  would double every blank line between blocks. */}
+              {m.role === "user" ? m.content : <AnswerMarkdown content={m.content} />}
             </div>
             {m.role === "assistant" && m.trace && m.trace.length > 0 && (
               <TracePanel trace={m.trace} />
