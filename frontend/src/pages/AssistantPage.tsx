@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../api/client";
 import { askAssistant, type ChatMessage, type TraceStep } from "../api/assistant";
 import AnswerMarkdown from "../components/assistant/AnswerMarkdown";
 
@@ -69,7 +70,18 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Null until the API answers, so the subtitle renders no range rather than a
+  // guessed one. The years were hardcoded "2022-2025" and went stale the moment
+  // 2026 loaded -- the same bug TODO.md records against the *backend* prompt,
+  // which now derives its coverage from the database. This is the other half.
+  const [seasons, setSeasons] = useState<number[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    apiFetch<number[]>("/api/analytics/seasons")
+      .then((rows) => setSeasons(rows.length > 0 ? rows : null))
+      .catch(() => setSeasons(null));
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -122,7 +134,8 @@ export default function AssistantPage() {
         <div>
           <h1 className="text-xl font-bold text-chalk">Ask the Data</h1>
           <p className="text-sm text-chalk-dim">
-            Natural-language questions about NFL player stats (2022–2025).
+            Natural-language questions about NFL player stats
+            {seasons && ` (${Math.min(...seasons)}–${Math.max(...seasons)})`}.
           </p>
         </div>
         {messages.length > 0 && (
