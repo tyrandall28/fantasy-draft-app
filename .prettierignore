@@ -1,0 +1,11 @@
+# Markdown in this repo is hand-wrapped and hand-aligned, and a formatter pass
+# over it is pure churn: it repads every table delimiter row, inserts blank
+# lines before headings, and rewrites bare URLs. Two of its rewrites are also
+# lossy -- it moves bold markers out from around code spans
+# (**A `--dry-run` of X** becomes **A** `--dry-run` **of X**, which renders
+# differently), and it de-indents continuation lines inside list items, which
+# survives only on CommonMark lazy continuation and breaks the moment one of
+# those lines starts with something that parses as a new block.
+#
+# RUNBOOK.md took a 225-line diff this way with zero content changes.
+*.md
