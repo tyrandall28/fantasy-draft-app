@@ -24,10 +24,10 @@ import sys
 from datetime import date, datetime
 
 import nflreadpy as nfl
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, and_, or_
 
 from app.database import async_session
-from app.nfl_season import default_stat_seasons
+from app.nfl_season import current_nfl_season, default_stat_seasons
 from app.models.player import Player, PlayerBio, PlayerDerivedStats, PlayerSeason, PlayerWeeklyStat
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -468,7 +468,17 @@ async def step3_weekly_stats(
                 )
             logger.info(f"  Full refresh: deleted existing data for seasons {seasons}")
         else:
-            # Incremental: find which weeks already exist
+            # Incremental. "Does this week exist?" is the wrong question to ask
+            # of a season still being played: the Thursday night game creates
+            # the (season, week) pair on Friday, so a week-exists check skips
+            # the 28 teams that play on Sunday -- and skips them permanently,
+            # because the pair never stops existing. Week 2 of 2026 sat at 2 of
+            # 32 teams through three refreshes for exactly this reason.
+            #
+            # So weeks of the in-progress season are always re-read, which also
+            # picks up the stat corrections nflverse issues midweek. Finished
+            # seasons keep the cheap skip -- their weeks cannot gain teams.
+            current_season = current_nfl_season()
             existing_weeks = await get_existing_weeks(db, seasons)
             logger.info(f"  Found {len(existing_weeks)} existing (season, week) pairs in DB")
 
@@ -480,26 +490,56 @@ async def step3_weekly_stats(
                 if s is not None and w is not None:
                     all_new_weeks.add((s, w))
 
-            weeks_to_skip = existing_weeks & all_new_weeks
-            weeks_to_insert = all_new_weeks - existing_weeks
+            weeks_to_skip = {
+                (s, w) for (s, w) in existing_weeks & all_new_weeks if s < current_season
+            }
+            weeks_to_load = all_new_weeks - weeks_to_skip
+            weeks_to_replace = weeks_to_load & existing_weeks
 
-            logger.info(f"  Skipping {len(weeks_to_skip)} weeks already in DB")
-            logger.info(f"  Inserting {len(weeks_to_insert)} new weeks")
+            logger.info(
+                f"  Skipping {len(weeks_to_skip)} settled weeks (seasons before {current_season})"
+            )
+            logger.info(
+                f"  Loading {len(weeks_to_load)} weeks: "
+                f"{len(weeks_to_replace)} re-read, "
+                f"{len(weeks_to_load) - len(weeks_to_replace)} new"
+            )
 
-            if not weeks_to_insert:
-                logger.info("  No new weeks to insert — step 3 complete")
+            if not weeks_to_load:
+                logger.info("  No weeks to load — step 3 complete")
                 if not dry_run:
                     await db.commit()  # commit headshot updates
                 return set()
 
-            # Filter DataFrame to only new weeks
+            # A re-read week is deleted before reinsert, or a week that gained
+            # teams since the last run ends up holding both copies.
+            # Not guarded by dry_run: the whole step runs in one transaction
+            # that a dry run rolls back below, so deleting here costs nothing
+            # and lets the rehearsal hit the same unique constraint the real
+            # run would.
+            if weeks_to_replace:
+                await db.execute(
+                    delete(PlayerWeeklyStat).where(
+                        or_(*[
+                            and_(PlayerWeeklyStat.season == s, PlayerWeeklyStat.week == w)
+                            for s, w in sorted(weeks_to_replace)
+                        ])
+                    )
+                )
+
+            # Filter DataFrame to the weeks being loaded. Cast to the frame's own
+            # dtypes -- Python ints build an i64 column and nflverse ships i32,
+            # which polars refuses to join.
             import polars as pl
             week_pairs = pl.DataFrame({
-                "season": [s for s, _ in weeks_to_insert],
-                "week": [w for _, w in weeks_to_insert],
-            })
+                "season": [s for s, _ in weeks_to_load],
+                "week": [w for _, w in weeks_to_load],
+            }).with_columns(
+                pl.col("season").cast(stats_df.schema["season"]),
+                pl.col("week").cast(stats_df.schema["week"]),
+            )
             stats_df = stats_df.join(week_pairs, on=["season", "week"], how="inner")
-            logger.info(f"  Filtered to {len(stats_df)} rows for new weeks only")
+            logger.info(f"  Filtered to {len(stats_df)} rows for those weeks")
 
         # Insert the data
         count = 0
@@ -574,6 +614,11 @@ async def step3_weekly_stats(
 
         if not dry_run:
             await db.commit()
+        else:
+            # Everything above really ran -- the delete, the flushes, the
+            # constraint checks -- so a dry run proves the step would succeed
+            # rather than only proving the download parsed. Then throw it away.
+            await db.rollback()
 
         logger.info(f"  Inserted {count} weekly stat records across {len(inserted_weeks)} weeks")
         return inserted_weeks

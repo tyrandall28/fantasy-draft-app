@@ -157,9 +157,16 @@ python -m scripts.refresh_data
 That's it. During the season, run it weekly — Tuesday or Wednesday, once
 nflverse has published the weekend's games.
 
-It is **safe to run any time**. It's incremental: it adds weeks that aren't in
-the database yet and leaves everything else alone. Running it twice in a row does
-nothing the second time.
+It is **safe to run any time**. It's incremental, but not naively so: weeks of
+the season *currently being played* are re-read on every run, while weeks of
+finished seasons are loaded once and then left alone.
+
+That distinction matters in-season and is worth understanding. A week's games
+don't all arrive together — Thursday night lands two days before Sunday's
+thirteen, and Monday night a day after — so a week that already exists in the
+database still has to be re-read to fill in. nflverse also issues stat
+corrections for a week days after it was played. Re-reading the live season
+picks up both; skipping a week because it already exists picks up neither.
 
 What it does, in order:
 
@@ -392,8 +399,9 @@ then re-run the refresh.
 
 ### A refresh failed partway through
 
-Just re-run it. Each step commits independently and the pipeline is incremental,
-so it picks up where it stopped. Then run the doctor to confirm.
+Just re-run it. Each step commits independently, and re-reading a week replaces
+it rather than duplicating it, so it picks up where it stopped. Then run the
+doctor to confirm.
 
 ### Rankings came back empty
 
