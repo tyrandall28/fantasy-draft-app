@@ -167,7 +167,7 @@ export default function DashboardPage() {
           )}
 
           {error && (
-            <div className="bg-fall/10 border border-fall/20 text-fall p-2.5 rounded-lg mb-3 text-sm">
+            <div className="bg-fall/10 border border-fall/20 text-fall p-2.5 rounded-lg mb-3 text-sm whitespace-pre-line">
               {error}
             </div>
           )}

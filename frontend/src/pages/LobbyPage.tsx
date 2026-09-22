@@ -130,7 +130,7 @@ export default function LobbyPage() {
   }
 
   if (!league) {
-    return <div className="min-h-screen bg-ink-900 text-fall p-6">{error || "League not found"}</div>;
+    return <div className="min-h-screen bg-ink-900 text-fall p-6 whitespace-pre-line">{error || "League not found"}</div>;
   }
 
   const teamCount = league.team_count;
@@ -234,7 +234,7 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      {error && <div className="bg-fall/10 text-fall px-4 py-2 text-sm border-b border-fall/20">{error}</div>}
+      {error && <div className="bg-fall/10 text-fall px-4 py-2 text-sm border-b border-fall/20 whitespace-pre-line">{error}</div>}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">

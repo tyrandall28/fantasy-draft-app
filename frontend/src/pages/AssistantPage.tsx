@@ -224,7 +224,7 @@ function AssistantChat() {
           </div>
         )}
 
-        {error && <div className="text-sm text-fall">{error}</div>}
+        {error && <div className="text-sm text-fall whitespace-pre-line">{error}</div>}
       </div>
 
       <form onSubmit={onSubmit} className="border-t border-ink-700 py-3">

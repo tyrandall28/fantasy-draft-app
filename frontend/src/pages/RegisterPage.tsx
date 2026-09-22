@@ -90,7 +90,7 @@ export default function RegisterPage() {
             <h2 className="text-xl font-bold text-chalk mb-6">Create your account</h2>
 
             {error && (
-              <div className="bg-fall/10 border border-fall/20 text-fall p-3 rounded-lg mb-4 text-sm">
+              <div className="bg-fall/10 border border-fall/20 text-fall p-3 rounded-lg mb-4 text-sm whitespace-pre-line">
                 {error}
               </div>
             )}
