@@ -10,21 +10,47 @@
   `APP_ENVIRONMENT=production` now makes startup *fail* while `APP_SECRET_KEY` or
   `APP_DATABASE_URL` are still at their defaults. A crash, not a log warning.
 - [ ] **Migrate tokens to HttpOnly cookies** — localStorage is vulnerable to XSS; requires backend + frontend refactor
-- [ ] **Password validation** — enforce minimum length (8+), complexity rules on register
+- [x] **Registration validation** — there was none: `email: str` (with
+  `EmailStr` imported and unused) and a bare `password: str`, so `"a"` / `"a"`
+  was a valid account. Now 8-64 characters with at least one letter and one
+  digit, a 3-character username floor, and a structural email check that
+  lowercases on the way in (otherwise `Bob@x.com` and `bob@x.com` become two
+  accounts, since `get_user_by_email` matches exactly). Deliberately light on
+  composition rules — NIST SP 800-63B recommends against mandating them, and
+  length is what actually helps. Login applies *no* rules, so nobody who
+  registered under the old ones is locked out.
+  - [ ] Real email validation would want `EmailStr`, which needs the
+    `email-validator` package. Not added unprompted; the structural check
+    rejects the garbage that matters and only sending mail proves an address
+    exists anyway.
 
 ### Critical (draft integrity)
-- [ ] **Re-enable draft turn enforcement** — `app/ws/draft_room.py` has the
-  "Not your turn" check commented out (`# TODO: re-enable turn enforcement after
-  testing`), and the line below it reassigns `user_id = expected_user`. Any
-  connected client can therefore make the pick for whoever is on the clock.
-- [ ] **Check league membership on WebSocket connect** — `ws/events.py` verifies
-  the JWT but never checks that the user belongs to the league, so any
-  authenticated user can join any draft room and receive its broadcasts.
-- [ ] **Restrict undo to the commissioner** — `handle_undo_pick` has no
-  authorization check; any connected client can undo the last pick.
+- [x] **Draft turn enforcement re-enabled** — the "Not your turn" check was
+  commented out *and* the line below it reassigned `user_id = expected_user`,
+  so any connected client could make the pick for whoever was on the clock.
+  Enforced again, with one deliberate exception: the commissioner may pick for
+  the team on the clock (that's how a dropped player gets drafted for), and the
+  pick is attributed to that team rather than to him.
+- [x] **League membership checked on WebSocket connect** — `ws/events.py`
+  verified the JWT but never checked that the user belonged to the league, so
+  any authenticated user could join any draft room by id and receive its
+  broadcasts. `_is_league_participant` now admits members and the commissioner
+  and closes everyone else with 4003.
+- [x] **Undo and the timer toggle restricted to the commissioner** — neither
+  had any authorization check. Both are commissioner-only now, hidden in the
+  draft room UI for everyone else (the state broadcast carries
+  `commissioner_id`), and enforced server-side regardless of the UI.
+- Covered by `tests/test_ws/test_draft_authorization.py` — 13 tests, each of
+  which fails against the old code.
 
 ### High
-- [ ] **Rate limiting on auth endpoints** — prevent brute force on login/register (e.g. `slowapi`)
+- [x] **Rate limiting on auth endpoints** — login 10/15min, register 5/hour,
+  refresh 10/15min, per IP, in `app/services/rate_limit.py`. Sliding window,
+  keyed off the first `X-Forwarded-For` entry because behind Cloud Run the
+  direct peer is Google's front end and identical for every caller. Not
+  slowapi: its default backend is an in-process dict, which is exactly this, so
+  the dependency would have bought decorator syntax rather than stronger
+  limits. Revisit with a shared store if this ever runs multi-instance.
 - [ ] **WebSocket auth via header** — currently passes JWT in query string which gets logged
 - [ ] **HTTPS enforcement** — required before any real users
 - [ ] **Refresh token rotation** — issue new refresh token on each use, invalidate old one
@@ -72,8 +98,90 @@
 - [ ] **Scheduled refresh** — Cloud Scheduler hitting `scripts.refresh_data`
   in-season, once the app is deployed. Design and exact commands in
   `docs/scheduled-refresh.md`, which argues for daily rather than weekly.
+  The repo-side prerequisites are done: `--stats --current-season` exists so
+  the job loads only the in-progress season (the default pulls five, four of
+  which can never change) and names no year to go stale; exit codes now
+  distinguish a failed download from a health-check complaint, which is why
+  the doc sets `--max-retries=0`. What's left is the GCP resources themselves.
   Partial weeks are handled: `app/services/season_coverage.py` measures coverage
   per team, so a mid-week refresh no longer hides the teams that haven't played.
+
+---
+
+## Deployment (GCP)
+
+Target is Cloud Run + Cloud SQL. `docs/deploy.md` has the commands and the
+pre-launch checklist; `docs/scheduled-refresh.md` covers the daily data job.
+This section is the state of the work.
+
+- [x] **The image was carrying a secret.** `backend/Dockerfile` did `COPY . .`
+  with no `.dockerignore`, so a build baked in `backend/.env` — holding the real
+  `APP_ANTHROPIC_API_KEY` — where anyone who can pull the image can read it back
+  out of a layer. It also copied `backend/venv/`: 293 MB of Windows-built
+  packages that cannot execute on Linux. Root `.dockerignore` now excludes both,
+  plus caches, docs and git.
+- [x] **One image serves both halves.** The frontend is built in a first stage
+  and served from `/` by FastAPI, because `api/client.ts` uses relative URLs
+  (`BASE_URL = ""`) and `DraftContext.tsx` derives the WebSocket URL from
+  `window.location.host` — the code already assumed same-origin. So CORS never
+  applies in production and `/ws` needs no extra routing. The build context is
+  the repo root: `docker build -f backend/Dockerfile .`
+  - Client-side routes are handled by an `SPAStaticFiles` fallback to
+    `index.html`, except under `/assets/`, where a miss stays a 404 rather than
+    silently returning a page of HTML in place of a missing bundle.
+- [x] **`$PORT` is respected**, which Cloud Run injects, with 8000 as the
+  default so local use is unchanged. The container also runs as a non-root user.
+- [x] **`GET /healthz`** — liveness only, no database query on purpose: a probe
+  that touches Cloud SQL turns a brief database blip into a restart loop.
+- [x] **The AI assistant is held.** `APP_ASSISTANT_ENABLED=false` in production;
+  `/api/assistant/status` tells the frontend, which renders a coming-soon page
+  with no input box instead of letting someone type a question and collect a
+  503. Enforced server-side too, so a hand-rolled POST can't spend credits.
+  Message *length* is now capped as well (2k for a question, 120k for a
+  conversation) — only the message *count* was bounded before, so one request
+  could push megabytes into a metered context window.
+
+### Open
+- [x] **Decided: pin Cloud Run to `--max-instances=1`.**
+  `DraftRoomManager` keeps rooms in a process-local dict
+  (`app/ws/draft_room.py`), so with two instances, two users in the same draft
+  land on different ones and never see each other's picks. Nothing errors —
+  they silently draft in separate realities. One instance removes the
+  possibility and is ample at this scale. Written into `docs/deploy.md` with
+  the reasoning, because **raising that number breaks the draft**.
+  - [ ] The real fix — shared state (Redis pub/sub) or sticky routing by
+    league id — is deferred to the draft board rework, since that code is
+    being rewritten anyway. Blocks horizontal scaling until then.
+- [x] **`/api/players` and `/api/analytics` now require a login.** Both
+  routers were fully open to the internet. Nothing private leaked (it's public
+  nflverse data) but they were an unauthenticated path straight to Cloud SQL,
+  where reads are metered. Router-level `Depends(get_current_user)` on both.
+  The app is unaffected: every caller already goes through `apiFetch`, which
+  attaches the token, from pages behind `ProtectedRoute`.
+  - Analytics was already bounded (200 rows per ranking query, 200 ids per
+    sparkline/recent-form batch), so auth was the only missing half there.
+  - `/api/players` gained `limit`/`offset` with a hard ceiling of 1,000 on an
+    explicitly requested page. `limit` is deliberately *not* defaulted: the
+    draft room uses this as its fallback list and filters client-side, so a
+    default page size would silently truncate the board and its search box.
+  - [ ] Move that draft-room fallback onto `/base-rankings` (~300 draftable
+    players, ranked) instead of all ~3,700, during the draft rework. Then this
+    endpoint can default to a page like everything else.
+- [ ] **Turn the AI assistant back on behind a real quota.** What "held" is
+  waiting for: per-user daily question limits, and a spend ceiling. The
+  endpoint-level rate limiter in `app/services/rate_limit.py` is the obvious
+  place to start, keyed by user id rather than IP.
+  - Decided *against* an admin bypass so the owner could use it in production.
+    It would need an `is_admin` column, a way to set it, and would leave one
+    database row between the API key and everyone. The assistant runs fully
+    locally, where it costs the same credits, so the bypass buys nothing.
+- [ ] **`requirements.txt` installs pytest into the production image.** Minor
+  (a few MB) but it belongs in a dev-only file, and the same change is a
+  natural moment to do the lockfile item below.
+- [ ] **HTTPS / secrets checklist before first deploy** — `APP_SECRET_KEY` and
+  `APP_DATABASE_URL` from Secret Manager, `APP_ENVIRONMENT=production` (which
+  makes startup fail if either is still at its public default), Cloud SQL
+  backups configured.
 
 ---
 

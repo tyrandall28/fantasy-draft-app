@@ -1,8 +1,13 @@
 # Scheduled data refresh
 
 How `python -m scripts.refresh_data` gets run automatically once this app is on
-GCP. **Nothing here is live yet** — this is the design and the exact commands,
-written to be read before it's built.
+GCP. **No GCP resource here exists yet** — this is the design and the exact
+commands, written to be read before it's built.
+
+What *has* been done in the repo, so these commands work when you run them: the
+image builds the frontend and serves it same-origin, `.dockerignore` keeps the
+`.env` and the venv out of it, `--stats --current-season` exists as a flag, and
+the exit codes distinguish a failed download from a health-check complaint.
 
 Implements the `TODO.md` item "Scheduled refresh". One change from what's
 written there: **daily**, not weekly in-season. Reasoning in
@@ -45,7 +50,19 @@ workflows on public repos after 60 days without commits.)
 
 None of this works until these exist. Listed so it's obvious what's blocking:
 
-- [ ] Backend image pushed to Artifact Registry
+- [ ] Image pushed to Artifact Registry. **The build context is the repo
+      root**, not `backend/`, because `backend/Dockerfile` now builds the
+      frontend into the same image and serves it at `/`:
+
+      ```bash
+      docker build -f backend/Dockerfile \
+        -t REGION-docker.pkg.dev/PROJECT_ID/REPO/backend:latest .
+      ```
+
+      The root `.dockerignore` is what keeps `backend/.env` and
+      `backend/venv/` out of that image. Both landed in it before: the
+      first is a leaked Anthropic key, the second 293 MB of Windows-built
+      packages that cannot execute on Linux.
 - [ ] Cloud SQL Postgres instance, migrations applied (`alembic upgrade head`)
 - [ ] `APP_SECRET_KEY` and `APP_DATABASE_URL` in Secret Manager
       (`app/config.py` refuses to start on the dev defaults when
@@ -101,13 +118,13 @@ gcloud run jobs create refresh-data \
   --region=REGION \
   --image=REGION-docker.pkg.dev/PROJECT_ID/REPO/backend:latest \
   --command=python \
-  --args=-m,scripts.refresh_data \
+  --args=-m,scripts.refresh_data,--stats,--current-season \
   --service-account=refresh-job@PROJECT_ID.iam.gserviceaccount.com \
   --set-cloudsql-instances=PROJECT_ID:REGION:INSTANCE \
   --set-secrets=APP_DATABASE_URL=app-database-url:latest,APP_SECRET_KEY=app-secret-key:latest \
-  --set-env-vars=APP_ENVIRONMENT=production \
+  --set-env-vars=APP_ENVIRONMENT=production,APP_ASSISTANT_ENABLED=false \
   --task-timeout=30m \
-  --max-retries=1 \
+  --max-retries=0 \
   --memory=1Gi \
   --cpu=1
 ```
@@ -116,24 +133,39 @@ Flag by flag, since this is the whole lesson:
 
 | Flag | What it's doing |
 | --- | --- |
-| `--image` | **The same image the API serves from.** `backend/Dockerfile` does `COPY . .`, so `scripts/` is already inside. No second build. |
-| `--command` / `--args` | Overrides the Dockerfile's `CMD` (uvicorn) for this job only. Together they run `python -m scripts.refresh_data`. |
+| `--image` | **The same image the API serves from.** The Dockerfile copies all of `backend/`, so `scripts/` is already inside. No second build. |
+| `--command` / `--args` | Overrides the Dockerfile's `CMD` (uvicorn) for this job only. Together they run `python -m scripts.refresh_data --stats --current-season`. |
+| `--stats` | Skips the ESPN/Sleeper draft-ranking fetch. Those lists are a preseason artefact and don't move during the season, so scraping them nightly is risk with no benefit. Refresh them by hand in the spring. |
+| `--current-season` | Loads the in-progress season only. The default is the last four *completed* seasons plus the current one, and a completed season cannot change — re-downloading four of them every night is waste. The flag derives the year from the date rather than naming it, so this command never goes stale. |
 | `--service-account` | The identity from step 1. Omit it and you silently get the default compute SA, which is over-privileged. |
 | `--set-cloudsql-instances` | Attaches the Cloud SQL socket. **This is the line that replaces the Auth Proxy** you'd need from GitHub Actions. |
 | `--set-secrets` | Mounts Secret Manager values as env vars at runtime. Never bake these into the image. |
 | `--task-timeout` | Hard kill after 30m. Default is 10m, which the first full stats pull may exceed. Max is 24h. |
-| `--max-retries` | One retry on failure. Safe *only* because the script is idempotent — see below. |
+| `--max-retries` | **Zero.** Not because the script isn't idempotent (it is) but because a retry can't tell the two failures apart — see below. |
 | `--memory` | The weekly-stats step holds a dataframe; 512Mi is tight. |
 
 > **Gotcha:** write `--args=-m,...` with the `=`. As a separate token,
 > `gcloud` parses the leading `-m` as one of its own flags and fails oddly.
 > `--args` is comma-delimited, which is why it's `-m,scripts.refresh_data`.
 
-**Why `--max-retries=1` is safe here:** `scripts/refresh_data.py` is
-non-destructive unless you pass `--full-refresh`, and it runs its steps in
-dependency order (weekly logs → season totals → derived metrics). A re-run
-re-does work rather than corrupting it. If that ever stops being true, this flag
-has to go to `0`.
+**Why `--max-retries=0`, when the script is idempotent.** It is safe to re-run
+— `refresh_data` is non-destructive unless you pass `--full-refresh`, and it
+runs its steps in dependency order (weekly logs → season totals → derived
+metrics), so a second run re-does work rather than corrupting it. The problem
+is that Cloud Run retries on *any* non-zero exit and cannot read the reason:
+
+| Exit | Means | Is a retry useful? |
+| --- | --- | --- |
+| 0 | Loaded and verified | — |
+| 1 | A download or write failed | Yes, possibly transient |
+| 2 | Bad arguments | Never |
+| 3 | Data written, but `scripts.doctor` objects to it | No — the data is already there and a re-download produces the same complaint |
+
+Exit 3 is the common one in practice, and re-downloading a season because the
+health check is unhappy about it wastes ten minutes and tells you nothing new.
+With retries off, **the daily cadence is the retry**: a Tuesday failure is
+picked up on Wednesday. Turn retries back on only if you split exit 1 into its
+own job.
 
 Test it by hand before it's ever on a schedule:
 
@@ -237,9 +269,12 @@ stale numbers on the analytics pages.
 
 Four things. The first two already exist:
 
-- ✅ **Non-zero exit on failure.** `scripts/refresh_data.py:274` does
-  `raise SystemExit(asyncio.run(run(args)))` and `run()` returns `1` on error.
-  Without this, the platform records every run as a success.
+- ✅ **Non-zero exit on failure**, and a *distinct* code per cause. `main()`
+  does `raise SystemExit(asyncio.run(run(args)))`; the codes are the table
+  above, defined as `EXIT_*` constants at the top of the script. Without a
+  non-zero exit the platform records every run as a success; without the
+  distinction, "nflverse was down" and "the data looks wrong" are the same
+  event to anything watching.
 - ✅ **Idempotent.** Covered above.
 - ⬜ **An alert on failure.** In Cloud Logging, save a query like
   `resource.type="cloud_run_job" resource.labels.job_name="refresh-data" severity>=ERROR`,
@@ -247,7 +282,12 @@ Four things. The first two already exist:
   minutes of console work; the single highest-value item on this page.
 - ⬜ **A "data as of" line in the UI.** The cheapest staleness detector there is,
   and the only one a human would actually notice. The row census in
-  `refresh_data` already knows when it last wrote.
+  `refresh_data` already knows when it last wrote. Still the most valuable
+  unbuilt item here, and it's UI, so it wants a design pass first.
+
+Separately, the API service (not the job) now serves `GET /healthz` — liveness
+only, no database query, so a brief Cloud SQL blip can't turn into a restart
+loop. Point Cloud Run's startup probe at it.
 
 Overlap protection isn't needed yet — a daily job measured in minutes can't
 collide with itself. It would matter if this ever went hourly.

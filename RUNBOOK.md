@@ -130,8 +130,17 @@ APP_ANTHROPIC_API_KEY=sk-ant-...
 APP_ASSISTANT_MODEL=claude-opus-5
 ```
 
-`backend/.env` is gitignored. Without a key the rest of the app works fine and
-the assistant page returns a clear "not configured" message.
+`backend/.env` is gitignored, and `.dockerignore` keeps it out of the container
+image — a key baked into a layer is readable by anyone who can pull it.
+
+Without a key the rest of the app works fine and the "Ask AI" page shows a
+"coming soon" notice with no input box, rather than letting you type a question
+and collecting an error.
+
+**The assistant is held off in any deployed instance** — set
+`APP_ASSISTANT_ENABLED=false` there. Questions cost real credits and the
+endpoint has no per-user quota yet, so an open deploy is an open tab. The flag
+defaults to `true`, so local development with a key set needs nothing.
 
 ### Step 6 — Frontend
 
@@ -422,9 +431,12 @@ python -m scripts.doctor                                  # confirm
 python -m rankings_ingester.ingest_stats --steps 6        # rebuild
 ```
 
-### The AI assistant returns 503
+### The "Ask AI" page says "coming soon"
 
-`APP_ANTHROPIC_API_KEY` isn't set. See [step 5](#step-5--optional-enable-the-ai-assistant).
+Either `APP_ANTHROPIC_API_KEY` isn't set or `APP_ASSISTANT_ENABLED=false`. Both
+have to be right for the assistant to answer; `GET /api/assistant/status` says
+which state it's in. See [step 5](#step-5--optional-enable-the-ai-assistant).
+This is the intended state on a deployed instance.
 
 ### Start completely over
 
