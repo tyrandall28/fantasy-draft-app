@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, CurrentUser
 from app.schemas.auth import (
@@ -16,6 +17,7 @@ from app.services.auth_service import (
     decode_token,
     get_user_by_email,
     get_user_by_id,
+    get_user_by_username,
     register_user,
     verify_password,
 )
@@ -31,11 +33,24 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
     dependencies=[Depends(limit_register)],
 )
 async def register(body: RegisterRequest, db: DB):
-    existing = await get_user_by_email(db, body.email)
-    if existing:
+    if await get_user_by_email(db, body.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    user = await register_user(db, body.email, body.username, body.password)
+    # `username` is UNIQUE in the database too, and only the email was checked
+    # here — so the second person to want a username got an IntegrityError and
+    # a 500 on the one screen every visitor sees first.
+    if await get_user_by_username(db, body.username):
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    try:
+        user = await register_user(db, body.email, body.username, body.password)
+    except IntegrityError:
+        # Both checks above can still lose a race with a simultaneous signup.
+        # The database has the last word; this turns its answer into the same
+        # 400 rather than a 500.
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Email or username already taken")
+
     return TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),

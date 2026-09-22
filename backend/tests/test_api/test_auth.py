@@ -30,6 +30,25 @@ class TestRegister:
         assert resp2.status_code == 400
         assert "already registered" in resp2.json()["detail"].lower()
 
+    async def test_register_duplicate_username(self, client):
+        """A taken username used to reach the UNIQUE constraint and 500.
+
+        Only the email was checked, so the second person to pick a username
+        got an IntegrityError off the first screen of the app.
+        """
+        payload = {
+            "email": "first@example.com",
+            "username": "sameuser",
+            "password": "password123",
+        }
+        resp1 = await client.post("/api/auth/register", json=payload)
+        assert resp1.status_code == 201
+
+        payload["email"] = "second@example.com"  # different email, same username
+        resp2 = await client.post("/api/auth/register", json=payload)
+        assert resp2.status_code == 400
+        assert "username" in resp2.json()["detail"].lower()
+
 
 class TestRegisterValidation:
     """Registration accepted anything before this: `email: str` with EmailStr
