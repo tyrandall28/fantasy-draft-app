@@ -145,10 +145,16 @@ async def check_environment(db, rep: Report) -> None:
     else:
         rep.add(OK, "APP_SECRET_KEY", "set from environment")
 
-    if settings.anthropic_api_key:
+    # Two conditions, and this reported only one of them: with the key set and
+    # APP_ASSISTANT_ENABLED=false it printed "enabled" while /api/assistant
+    # was answering 503. Report what `settings.assistant_enabled` actually is,
+    # and say which half is missing.
+    if settings.assistant_enabled:
         rep.add(OK, "AI assistant", f"enabled, model={settings.assistant_model}")
-    else:
+    elif not settings.anthropic_api_key:
         rep.add(INFO, "AI assistant", "disabled (APP_ANTHROPIC_API_KEY not set)")
+    else:
+        rep.add(INFO, "AI assistant", "held (APP_ASSISTANT_ENABLED is false); key is set")
 
 
 # ── 2. What data is present ───────────────────────────────────────────────────
