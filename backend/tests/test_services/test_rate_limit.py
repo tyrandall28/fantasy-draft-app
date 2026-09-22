@@ -8,6 +8,7 @@ import pytest
 
 from app.services.rate_limit import (
     LOGIN_LIMIT,
+    REFRESH_LIMIT,
     REGISTER_LIMIT,
     RateLimiter,
     client_key,
@@ -158,4 +159,47 @@ class TestLoginEndpointIsLimited:
         for _ in range(attempts):
             await client.post("/api/auth/login", json={"email": "x@y.com", "password": "p"})
         resp = await client.post("/api/auth/login", json={"email": "x@y.com", "password": "p"})
+        assert resp.status_code == 429
+
+
+class TestRefreshHasItsOwnBucket:
+    """Refresh shared the login bucket, which conflated a password guess with
+    a token this server already signed. The frontend treats a failed refresh
+    as "log out", so spending login quota on it signed people out mid-draft.
+    """
+
+    async def test_refresh_is_not_limited_by_failed_logins(self, client):
+        reg = await client.post("/api/auth/register", json={
+            "email": "stillhere@example.com",
+            "username": "stillhere",
+            "password": "password123",
+        })
+        refresh_token = reg.json()["refresh_token"]
+
+        # Burn the whole login bucket on wrong passwords.
+        for _ in range(LOGIN_LIMIT[0] + 1):
+            await client.post("/api/auth/login", json={
+                "email": "stillhere@example.com",
+                "password": "wrongpassword1",
+            })
+
+        resp = await client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+        assert resp.status_code == 200, "a live session should survive someone fat-fingering a password"
+
+    async def test_refresh_is_still_capped(self, client):
+        reg = await client.post("/api/auth/register", json={
+            "email": "loop@example.com",
+            "username": "looper",
+            "password": "password123",
+        })
+        token = reg.json()["refresh_token"]
+
+        attempts, _window = REFRESH_LIMIT
+        assert attempts > LOGIN_LIMIT[0], "refresh should be the looser of the two"
+
+        for _ in range(attempts):
+            resp = await client.post("/api/auth/refresh", json={"refresh_token": token})
+            token = resp.json()["refresh_token"]
+
+        resp = await client.post("/api/auth/refresh", json={"refresh_token": token})
         assert resp.status_code == 429

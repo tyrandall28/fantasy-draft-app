@@ -22,14 +22,26 @@ export async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
 
-  const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refresh }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+  } catch {
+    // Offline, or the server is unreachable. Says nothing about the token.
+    return null;
+  }
 
   if (!res.ok) {
-    clearTokens();
+    // Only discard the session when the server rejects the *token*. Any
+    // non-OK response used to clear it, so a 429 from the rate limiter or a
+    // brief 500 silently signed the user out — mid-draft, with no message.
+    // Those are worth retrying with the credentials we already hold.
+    if (res.status === 401 || res.status === 403) {
+      clearTokens();
+    }
     return null;
   }
 

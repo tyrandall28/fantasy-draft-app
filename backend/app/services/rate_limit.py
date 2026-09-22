@@ -35,6 +35,16 @@ LOGIN_LIMIT = (10, 15 * 60)
 # first, and this is the endpoint that writes rows.
 REGISTER_LIMIT = (5, 60 * 60)
 
+# Refresh used to share the login bucket, which conflated two different things.
+# A login attempt is a guess at a password; a refresh presents a token this
+# server already signed, so there is nothing to brute-force — the only thing
+# worth capping is volume. Sharing meant a few mistyped passwords could use up
+# a real session's refreshes, and the frontend treats a failed refresh as "log
+# out", so the cost of getting this wrong is signing someone out mid-draft.
+# One access token lasts 30 minutes, and every open tab refreshes its own, so
+# this is set well above any honest use.
+REFRESH_LIMIT = (60, 15 * 60)
+
 
 class RateLimiter:
     """Sliding-window counter, keyed by bucket name and client address.
@@ -130,3 +140,8 @@ def limit_login(request: Request) -> None:
 def limit_register(request: Request) -> None:
     """FastAPI dependency: rate-limits account creation."""
     _enforce(request, "register", REGISTER_LIMIT)
+
+
+def limit_refresh(request: Request) -> None:
+    """FastAPI dependency: caps token refreshes, in their own bucket."""
+    _enforce(request, "refresh", REFRESH_LIMIT)

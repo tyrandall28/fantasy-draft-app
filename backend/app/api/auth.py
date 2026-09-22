@@ -21,7 +21,7 @@ from app.services.auth_service import (
     register_user,
     verify_password,
 )
-from app.services.rate_limit import limit_login, limit_register
+from app.services.rate_limit import limit_login, limit_refresh, limit_register
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -69,7 +69,7 @@ async def login(body: LoginRequest, db: DB):
     )
 
 
-@router.post("/refresh", response_model=TokenResponse, dependencies=[Depends(limit_login)])
+@router.post("/refresh", response_model=TokenResponse, dependencies=[Depends(limit_refresh)])
 async def refresh(body: RefreshRequest, db: DB):
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":
