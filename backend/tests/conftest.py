@@ -27,6 +27,7 @@ from app.models import (
     BaseRanking, UserRanking, UserRankingEntry, League, LeagueMember, DraftPick,
 )
 from app.services.auth_service import create_access_token, hash_password
+from app.services.rate_limit import limiter
 from app.api.deps import get_db
 from app.main import app
 
@@ -41,6 +42,22 @@ def compile_uuid_sqlite(type_, compiler, **kw):
 @compiles(JSONB, "sqlite")
 def compile_jsonb_sqlite(type_, compiler, **kw):
     return "JSON"
+
+
+# ---------- Rate limiter ----------
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear the auth rate limiter between tests.
+
+    It's a module-level singleton holding per-IP counters, and every test
+    client shares one address. Without this, the tests that log in repeatedly
+    would start tripping the limit depending on suite order -- the same class
+    of order-dependent failure conftest already went to some trouble to remove.
+    """
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 # ---------- Database fixtures ----------

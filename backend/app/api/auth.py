@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import DB, CurrentUser
 from app.schemas.auth import (
@@ -19,11 +19,17 @@ from app.services.auth_service import (
     register_user,
     verify_password,
 )
+from app.services.rate_limit import limit_login, limit_register
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_register)],
+)
 async def register(body: RegisterRequest, db: DB):
     existing = await get_user_by_email(db, body.email)
     if existing:
@@ -36,7 +42,7 @@ async def register(body: RegisterRequest, db: DB):
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(limit_login)])
 async def login(body: LoginRequest, db: DB):
     user = await get_user_by_email(db, body.email)
     if not user or not verify_password(body.password, user.hashed_password):
@@ -48,7 +54,7 @@ async def login(body: LoginRequest, db: DB):
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, dependencies=[Depends(limit_login)])
 async def refresh(body: RefreshRequest, db: DB):
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":

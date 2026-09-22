@@ -31,6 +31,95 @@ class TestRegister:
         assert "already registered" in resp2.json()["detail"].lower()
 
 
+class TestRegisterValidation:
+    """Registration accepted anything before this: `email: str` with EmailStr
+    imported but unused, and a bare `password: str`, so "a" / "a" was a valid
+    account on a public deploy."""
+
+    @pytest.mark.parametrize("password", [
+        "short1",        # 6 chars
+        "1234567",       # 7 chars, still under the floor
+        "password",      # letters only
+        "12345678",      # digits only
+        "aaaaaaaa",      # no digit
+    ])
+    async def test_weak_passwords_are_rejected(self, client, password):
+        resp = await client.post("/api/auth/register", json={
+            "email": "weak@example.com",
+            "username": "weakuser",
+            "password": password,
+        })
+        assert resp.status_code == 422, f"{password!r} should have been rejected"
+
+    @pytest.mark.parametrize("password", ["password1", "correcthorse9"])
+    async def test_acceptable_passwords_are_allowed(self, client, password):
+        resp = await client.post("/api/auth/register", json={
+            "email": f"ok-{len(password)}@example.com",
+            "username": f"user{len(password)}",
+            "password": password,
+        })
+        assert resp.status_code == 201
+
+    @pytest.mark.parametrize("email", [
+        "notanemail",
+        "no@domain",
+        "@example.com",
+        "spaces in@example.com",
+        "two@@example.com",
+        "",
+    ])
+    async def test_malformed_emails_are_rejected(self, client, email):
+        resp = await client.post("/api/auth/register", json={
+            "email": email,
+            "username": "someuser",
+            "password": "password123",
+        })
+        assert resp.status_code == 422, f"{email!r} should have been rejected"
+
+    async def test_short_username_is_rejected(self, client):
+        resp = await client.post("/api/auth/register", json={
+            "email": "shortname@example.com",
+            "username": "ab",
+            "password": "password123",
+        })
+        assert resp.status_code == 422
+
+    async def test_email_is_stored_lowercased(self, client, auth_headers):
+        """Otherwise Bob@x.com and bob@x.com are two accounts, since
+        get_user_by_email matches exactly."""
+        resp = await client.post("/api/auth/register", json={
+            "email": "MixedCase@Example.COM",
+            "username": "mixeduser",
+            "password": "password123",
+        })
+        assert resp.status_code == 201
+
+        token = resp.json()["access_token"]
+        me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.json()["email"] == "mixedcase@example.com"
+
+    async def test_login_is_case_insensitive_on_email(self, client):
+        await client.post("/api/auth/register", json={
+            "email": "casetest@example.com",
+            "username": "casetest",
+            "password": "password123",
+        })
+        resp = await client.post("/api/auth/login", json={
+            "email": "CaseTest@Example.com",
+            "password": "password123",
+        })
+        assert resp.status_code == 200
+
+    async def test_login_does_not_apply_password_rules(self, client):
+        """A weak password that predates the rules must still be able to log in
+        (and fail on credentials, not on schema validation)."""
+        resp = await client.post("/api/auth/login", json={
+            "email": "nobody@example.com",
+            "password": "x",
+        })
+        assert resp.status_code == 401
+
+
 class TestLogin:
     async def test_login_success(self, client):
         # Register first
