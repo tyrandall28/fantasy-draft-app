@@ -60,10 +60,10 @@ assistant alongside the board.
 - Automatic reconnection with exponential backoff
 
 ### Stats & analytics
-- **3,573 players** with cross-source identity resolution — every row carries `gsis_id`, `espn_id`, `sleeper_id`, `yahoo_id`, and `pfr_id`, so sources join on IDs instead of trying to agree on how to spell "Ja'Marr Chase"
-- **24,193 weekly game logs** across the 2022–2026 seasons
-- **2,782 player-seasons** of totals, plus a derived-metrics table with per-game rates, efficiency, EPA/CPOE, target share, snap share, and boom/bust consistency
-- **3,352 player bios** including draft capital and combine measurables (1,807 with a recorded 40 time)
+- **3,700+ players** with cross-source identity resolution — every row carries `gsis_id`, `espn_id`, `sleeper_id`, `yahoo_id`, and `pfr_id`, so sources join on IDs instead of trying to agree on how to spell "Ja'Marr Chase"
+- **26,000+ weekly game logs** across the 2022–2026 seasons
+- **3,000+ player-seasons** of totals, plus a derived-metrics table with per-game rates, efficiency, EPA/CPOE, target share, snap share, and boom/bust consistency
+- **3,500+ player bios** including draft capital and combine measurables (around half with a recorded 40 time)
 - Charts for weekly trends, boom/bust distribution, target share vs. air yards, snap trends, and head-to-head comparison
 - Weekly charts plot the whole season, not just the games played: a week the
   player's team played without him is shaded red and crossed, his bye is shaded
@@ -81,7 +81,10 @@ the rows back. A metric enum means the model can't request a column that doesn't
 exist, and every response carries a debug trace of the model's reasoning, the
 tools it chose, the exact arguments, and token usage.
 
-Requires an Anthropic API key. Everything else in the app runs without one.
+**Off in the hosted demo.** Every question costs Anthropic credits and the
+endpoint has no per-user quota yet, so a public deploy is an open tab on
+someone else's bill — the app shows a "coming soon" page there instead. It runs
+locally with `APP_ANTHROPIC_API_KEY` set; everything else works without one.
 
 ## Architecture
 
