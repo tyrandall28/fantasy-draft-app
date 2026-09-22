@@ -23,6 +23,23 @@
     `email-validator` package. Not added unprompted; the structural check
     rejects the garbage that matters and only sending mail proves an address
     exists anyway.
+- [x] **A taken username returned 500** — `username` is UNIQUE in the database
+  but only the email was checked, so the second person to want a username hit
+  an IntegrityError on the first screen of the app. Both are checked now, and
+  the insert catches IntegrityError anyway so a simultaneous signup loses the
+  race with a 400 rather than a 500.
+- [x] **League settings had no bounds** — `name: str` against a VARCHAR(100)
+  column (a 500 on Postgres, invisible to the SQLite test suite), and bare
+  `int`s for every count, so `team_count: 0`, `pick_time_seconds: -10` and
+  arbitrary `position_slots` JSON were all stored happily. Bounded in
+  `app/schemas/league.py`, well outside what the lobby's own selectors offer.
+- [x] **`claim-position` took an untyped `dict`** — `{"position": "abc"}`
+  compared a str to an int and came back as a 500. It has a schema now; the
+  1..team_count range stays in the endpoint, which can name the number.
+- [x] **A member's `ranking_id` was assigned unchecked** — an id that didn't
+  exist hit the foreign key as a 500, and one belonging to *another user* was
+  accepted. It was the only endpoint touching a ranking that didn't verify
+  ownership.
 
 ### Critical (draft integrity)
 - [x] **Draft turn enforcement re-enabled** — the "Not your turn" check was
@@ -40,12 +57,29 @@
   had any authorization check. Both are commissioner-only now, hidden in the
   draft room UI for everyone else (the state broadcast carries
   `commissioner_id`), and enforced server-side regardless of the UI.
+- [x] **Starting a draft is the commissioner's** — `POST /draft/start` had no
+  check of any kind, not membership and not ownership, so any logged-in user
+  who knew a league id could start that league's draft: settings locked,
+  everyone assigned a slot, bots filling the empty seats. The lobby also
+  offered the button to every member, so it now shows "waiting for the
+  commissioner" to everyone else rather than a button the server refuses.
+- [x] **Reading a league requires belonging to it** — `GET /api/leagues/{id}`,
+  `/draft/state` and `/draft/results` were readable by any authenticated user.
+  The league response carries `invite_code`, so that read was enough to then
+  join the league. The rule now lives in `app/services/league_access.py`,
+  shared with the WebSocket check rather than written a third time.
 - Covered by `tests/test_ws/test_draft_authorization.py` — 13 tests, each of
-  which fails against the old code.
+  which fails against the old code — and `tests/test_api/test_drafts.py` for
+  the REST side.
 
 ### High
 - [x] **Rate limiting on auth endpoints** — login 10/15min, register 5/hour,
-  refresh 10/15min, per IP, in `app/services/rate_limit.py`. Sliding window,
+  refresh 60/15min, per IP, in `app/services/rate_limit.py`. Refresh shares no
+  bucket with login: a login is a guess at a password, a refresh presents a
+  token this server signed, and the frontend treats a failed refresh as "log
+  out" — so spending login quota on it signed people out mid-draft. The client
+  now also keeps its tokens unless the server actually rejects them (401/403),
+  where any non-OK response used to clear them. Sliding window,
   keyed off the first `X-Forwarded-For` entry because behind Cloud Run the
   direct peer is Google's front end and identical for every caller. Not
   slowapi: its default backend is an in-process dict, which is exactly this, so
@@ -89,6 +123,17 @@
 - [x] **Operational tooling** — `scripts/doctor.py` (health + data consistency
   report with fix suggestions) and `scripts/refresh_data.py` (one-command
   ordered refresh that verifies itself). Documented in `RUNBOOK.md`.
+  - [x] `doctor` reported the AI assistant as "enabled" whenever a key was
+    present, ignoring `APP_ASSISTANT_ENABLED`. With the flag off it claimed
+    enabled while `/api/assistant/query` answered 503. It reports
+    `settings.assistant_enabled` now, and says which half is missing.
+- [x] **Nothing stopped a duplicate draft pick** — the draft room reads the
+  taken players, checks the pick, then inserts, with awaits in between and the
+  auto-pick timer on the same event loop, so a human pick landing as the clock
+  expires could put one player on two rosters or two rows in one slot. Unique
+  constraints on `(league_id, player_id)` and `(league_id, overall_pick)` in
+  revision `9dfa74bbe207`; both write paths turn the IntegrityError into a
+  message and a state resync rather than a dead connection.
 - [x] **CI** — `.github/workflows/ci.yml`: backend tests, fresh-database
   migration + `alembic check` drift guard + downgrade check, frontend
   typecheck/build.
