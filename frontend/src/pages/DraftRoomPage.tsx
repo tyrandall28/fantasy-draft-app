@@ -27,6 +27,10 @@ function DraftRoomContent() {
 
   const isMyTurn = state.current_user_id === user?.id;
   const isCompleted = state.status === "completed";
+  // Undo and the timer toggle are commissioner-only and enforced in
+  // app/ws/draft_room.py. Hidden here so nobody is offered a button whose only
+  // possible outcome is an error.
+  const isCommissioner = state.commissioner_id === user?.id;
 
   return (
     <div className="h-screen bg-ink-900 text-chalk flex flex-col overflow-hidden">
@@ -57,8 +61,8 @@ function DraftRoomContent() {
               Offline Mode
             </span>
           )}
-          {/* Undo last pick (admin) */}
-          {state.picks.length > 0 && (
+          {/* Undo last pick — commissioner only */}
+          {isCommissioner && state.picks.length > 0 && (
             <button
               onClick={undoPick}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-fall/15 text-fall hover:bg-fall/25 transition-colors font-medium"
@@ -101,9 +105,14 @@ function DraftRoomContent() {
                         <p className="text-sm text-chalk-dim">Pick Timer</p>
                         <p className="text-[10px] text-chalk-mut">Auto-pick when timer expires</p>
                       </div>
+                      {/* Read-only for everyone but the commissioner: the
+                          clock is league-wide, so the toggle shows its state
+                          to all but only he can move it. */}
                       <button
                         onClick={() => toggleTimer(!state.timer_enabled)}
-                        className={`relative w-10 h-5 rounded-full transition-colors ${
+                        disabled={!isCommissioner}
+                        title={isCommissioner ? undefined : "Only the commissioner can change this"}
+                        className={`relative w-10 h-5 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                           state.timer_enabled ? "bg-accent" : "bg-ink-600"
                         }`}
                       >
@@ -119,6 +128,7 @@ function DraftRoomContent() {
                       {state.timer_enabled
                         ? "Timer is active. Picks will auto-select when time runs out."
                         : "Offline mode. Take your time — no auto-picks."}
+                      {!isCommissioner && " Only the commissioner can change this."}
                     </div>
                   </div>
                 </div>

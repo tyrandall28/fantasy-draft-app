@@ -55,6 +55,14 @@ class DraftRoom:
             state = await self._build_state(db)
             await ws.send_text(json.dumps({"event": "draft_state", **state}))
 
+    async def _is_commissioner(self, user_id: str) -> bool:
+        async with async_session() as db:
+            result = await db.execute(
+                select(League.commissioner_id).where(League.id == self.league_id)
+            )
+            commissioner_id = result.scalar_one_or_none()
+        return commissioner_id is not None and str(commissioner_id) == user_id
+
     async def _load_bot_ids(self, db):
         """Load and cache the set of bot user_ids for this league."""
         stmt = select(LeagueMember.user_id).where(
@@ -118,6 +126,9 @@ class DraftRoom:
             "picks": pick_list,
             "current_pick": current_pick,
             "current_user_id": current_user_id,
+            # So the room can hide the commissioner-only controls (undo, timer
+            # toggle) rather than offering buttons the server will refuse.
+            "commissioner_id": str(league.commissioner_id),
             "seconds_remaining": self.seconds_remaining,
             "status": status,
             "draft_order": league.draft_order,
@@ -148,12 +159,22 @@ class DraftRoom:
                 return
 
             expected_user = get_snake_pick_user(league.draft_order, current_pick, league.team_count)
-            # TODO: re-enable turn enforcement after testing
-            # if expected_user != user_id:
-            #     await self._send_error(user_id, "Not your turn")
-            #     return
-            # Admin mode: pick on behalf of whoever's turn it is
-            user_id = expected_user
+
+            # Turn enforcement. This was commented out "after testing" and the
+            # line below it reassigned user_id = expected_user, which meant any
+            # connected client could pick for whoever was on the clock.
+            #
+            # The commissioner keeps that ability on purpose — it's how you
+            # make a pick for someone who has dropped off, and how bots got
+            # picked for before. Everyone else may only pick on their own turn.
+            if expected_user != user_id:
+                is_commissioner = str(league.commissioner_id) == user_id
+                if not is_commissioner:
+                    await self._send_error(user_id, "Not your turn")
+                    return
+                # Attribute the pick to the team it belongs to, not to the
+                # commissioner who entered it.
+                user_id = expected_user
 
             drafted = await get_drafted_player_ids(db, self.league_id)
             if player_id in drafted:
@@ -278,6 +299,14 @@ class DraftRoom:
                 await self._send_error(user_id, "Draft not active")
                 return
 
+            # Undo rewrites shared history and can reopen a completed draft, so
+            # it belongs to the commissioner alone. It previously had no check
+            # at all: any connected client could erase the last pick, including
+            # somebody else's, repeatedly.
+            if str(league.commissioner_id) != user_id:
+                await self._send_error(user_id, "Only the commissioner can undo a pick")
+                return
+
             # Find the last pick
             picks_result = await db.execute(
                 select(DraftPick)
@@ -318,7 +347,14 @@ class DraftRoom:
                 current_user = get_snake_pick_user(league.draft_order, current_pick, league.team_count)
                 self._schedule_turn(league, current_user, current_pick)
 
-    async def handle_toggle_timer(self, enabled: bool):
+    async def handle_toggle_timer(self, user_id: str, enabled: bool):
+        # Also commissioner-only. The pick clock is a league-wide setting, and
+        # switching it off is how you'd stop the auto-pick that's about to draft
+        # for a stalling opponent — not a decision any participant should own.
+        if not await self._is_commissioner(user_id):
+            await self._send_error(user_id, "Only the commissioner can change the timer")
+            return
+
         self.timer_enabled = enabled
         if not enabled and self.timer_task:
             self.timer_task.cancel()

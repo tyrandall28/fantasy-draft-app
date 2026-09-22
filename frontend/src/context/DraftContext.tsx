@@ -43,6 +43,7 @@ export function DraftProvider({ leagueId, children }: Props) {
           picks: data.picks,
           current_pick: data.current_pick,
           current_user_id: data.current_user_id,
+          commissioner_id: data.commissioner_id,
           seconds_remaining: data.seconds_remaining,
           status: data.status,
           draft_order: data.draft_order,

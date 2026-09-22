@@ -295,6 +295,8 @@ export interface DraftState {
   picks: DraftPick[];
   current_pick: number;
   current_user_id: string;
+  /** Undo and the timer toggle are commissioner-only, enforced server-side. */
+  commissioner_id: string;
   seconds_remaining: number;
   status: "drafting" | "completed";
   draft_order: string[];
