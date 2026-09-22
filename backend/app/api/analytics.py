@@ -1,15 +1,24 @@
 """Analytics API endpoints for derived player stats."""
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import DB
+from app.api.deps import DB, get_current_user
 from app.models.player import Player, PlayerDerivedStats
 from app.nfl_season import REGULAR_SEASON_WEEKS
 from app.schemas.player import PlayerDerivedStatsResponse
 from app.services import recent_form, season_coverage
 
-router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+# Login required on every route. These were open to the internet: nothing
+# private is in them (public nflverse data) but they were an unauthenticated
+# path straight to Cloud SQL. Result sizes were already bounded — 200 rows per
+# ranking query, 200 ids per sparkline/recent-form batch — so auth was the
+# missing half, not the caps.
+router = APIRouter(
+    prefix="/api/analytics",
+    tags=["analytics"],
+    dependencies=[Depends(get_current_user)],
+)
 
 VALID_POSITIONS = {"QB", "RB", "WR", "TE", "K"}
 VALID_SORT_FIELDS = {

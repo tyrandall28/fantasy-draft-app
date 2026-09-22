@@ -264,3 +264,19 @@ class TestSeasonsDetail:
         assert row["is_complete"] is False
         assert row["teams_in_latest_week"] == 1
         assert row["total_teams"] == 2
+
+
+class TestAnalyticsRequiresAuth:
+    """The whole router was unauthenticated. Result sizes were already bounded
+    (200 rows per query, 200 ids per batch), so a login was the missing half."""
+
+    @pytest.mark.parametrize("path", [
+        "/api/analytics/position-rankings?position=QB&season=2024",
+        "/api/analytics/sparklines?player_ids=1,2",
+        "/api/analytics/recent-form?player_ids=1,2&season=2024",
+        "/api/analytics/seasons",
+        "/api/analytics/seasons/detail",
+    ])
+    async def test_unauthenticated_request_is_refused(self, client, path):
+        resp = await client.get(path)
+        assert resp.status_code in (401, 403), f"{path} should require a login"
