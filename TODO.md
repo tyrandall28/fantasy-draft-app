@@ -178,6 +178,20 @@ This section is the state of the work.
 - [ ] **`requirements.txt` installs pytest into the production image.** Minor
   (a few MB) but it belongs in a dev-only file, and the same change is a
   natural moment to do the lockfile item below.
+- [ ] **The image has never actually been built.** Everything in the
+  Deployment section above is verified *except* this: Docker Desktop's daemon
+  wasn't running, so `backend/Dockerfile` is correct by inspection only, and
+  `.dockerignore` was checked by simulating Docker's pattern rules rather than
+  by inspecting a real build context. First thing to do before deploying:
+
+  ```powershell
+  docker build -f backend/Dockerfile -t fantasy-draft .
+  docker run --rm -e PORT=8000 -p 8000:8000 fantasy-draft
+  # then open localhost:8000 -- the full SPA should come from the container
+  docker run --rm fantasy-draft sh -c 'ls -la /app/.env 2>&1; du -sh /app'
+  # ^ should say "No such file" and show a small image, not 300+ MB
+  ```
+
 - [ ] **HTTPS / secrets checklist before first deploy** — `APP_SECRET_KEY` and
   `APP_DATABASE_URL` from Secret Manager, `APP_ENVIRONMENT=production` (which
   makes startup fail if either is still at its public default), Cloud SQL
