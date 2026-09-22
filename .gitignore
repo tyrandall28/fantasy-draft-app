@@ -10,6 +10,10 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 
+# The built frontend, copied into the image by backend/Dockerfile. Only
+# present locally if you've run a build by hand; never committed.
+backend/static/
+
 # IDE
 .vscode/
 .idea/

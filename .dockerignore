@@ -1,0 +1,49 @@
+# Build context is the REPO ROOT (see backend/Dockerfile), so this file governs
+# everything the daemon is handed. Two entries here are load-bearing:
+#
+#   backend/.env  — holds the real APP_ANTHROPIC_API_KEY. `COPY . .` used to
+#                   bake it into an image layer, where anyone who can pull the
+#                   image can read it back out. Secrets arrive at runtime from
+#                   Secret Manager, never in the image.
+#   backend/venv/ — 293 MB of Windows-built packages that cannot execute on
+#                   Linux. Pure weight; requirements.txt is the real source.
+
+# Secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+backend/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Node — the image builds these itself in the frontend stage
+frontend/node_modules/
+frontend/dist/
+
+# Git / CI
+.git/
+.github/
+.gitignore
+.dockerignore
+
+# Local notes and working files, none of which belong in a running container
+claude.md
+CLAUDE.md
+*.md
+docs/
+error_output.txt
+screenshots/
+backend/rankings_ingester/backups/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
