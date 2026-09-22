@@ -1,5 +1,30 @@
 # TODO — Fantasy Draft App
 
+## Start here — deploy readiness, as of 2026-09-21
+
+A pre-deploy audit ran on this date. The 500s and the authorization holes it
+found are **fixed** (see the sections below, each marked `[x]` with what was
+wrong). What follows is what it found and left, in the order worth doing.
+Everything named here has a fuller entry further down.
+
+1. **Silent failures in the UI.** A failed request renders as an empty table
+   or as nothing happening. There is also no `ErrorBoundary`, so one render
+   crash is a white screen. → *UI / UX Polish*
+2. **The app is desktop-only.** → *Responsive layouts*, below, which now says
+   what specifically breaks.
+3. **Lint isn't in CI** and `npm run lint` is red with 31 errors. →
+   *Code Health*
+4. Smaller, individually cheap: the loose ends in *API hardening — leftovers*.
+
+Verified green on the audit date: `pytest` (309), `alembic check`, `alembic`
+up/down, `npm run build`, `scripts.doctor` (healthy, 1 expected local warning),
+and the container image builds. No secret has ever been committed — every
+commit was scanned, not just the working tree.
+
+The deploy plan itself (`docs/deploy.md`) was reviewed and holds up: the
+WebSocket request timeout, `--max-instances=1`, migrations as a one-off job,
+and Secret Manager are all handled there and none of it needs revisiting.
+
 ## Auth & Security (Pre-Launch)
 
 ### Critical
@@ -100,6 +125,50 @@
 - [ ] OAuth (Google login)
 - [ ] Login audit trail
 - [ ] 2FA (TOTP)
+
+---
+
+## API hardening — leftovers
+
+Found in the 2026-09-21 audit and deliberately left: none is a 500, a data
+loss, or reachable from the UI. Each is a few lines. Grouped so they can be
+done in one pass.
+
+- [ ] **`set-draft-order` accepts ids that aren't in the league** —
+  `{"order": ["nope", "also-nope"]}` returns 200 and stores it as
+  `league.draft_order`. It's commissioner-only, so this is self-inflicted
+  rather than an attack, but a bad order is read straight by
+  `get_snake_pick_user` and would put the draft on a user who isn't there.
+  Validate that `order` is exactly the set of member ids.
+- [ ] **`set-draft-order` has no status check** — every other league mutation
+  refuses once `status != "setup"`. This one can be called mid-draft, which
+  reorders who is on the clock underneath a running room.
+- [ ] **An unknown ranking source silently creates an empty ranking** —
+  `POST /api/rankings {"source": "not_a_source"}` returns 201 with zero
+  entries. Check against the sources `/api/rankings/sources` reports and 400
+  otherwise.
+- [ ] **No cap on rankings per user** — each is ~300 rows and nothing limits
+  how many a single account creates. A per-user ceiling (say 25) is enough.
+- [ ] **`LoginRequest.password` has no `max_length`** — bcrypt truncates at 72
+  bytes so hashing stays cheap, but the body is still parsed in full. Register
+  is bounded; login deliberately isn't validated, so bound the length only.
+- [ ] **Usernames are case-sensitive** — `Tyler` and `tyler` are two accounts
+  with two teams in a lobby. A product decision, not a bug: either normalise
+  on the way in like email, or match case-insensitively on the duplicate
+  check. Note the DB UNIQUE index is case-sensitive either way.
+- [ ] **`get_current_user` trusts the token's `sub` shape** — `api/deps.py`
+  does `uuid.UUID(payload["sub"])` with no guard, so a token we signed with a
+  malformed subject would 500. Unreachable while only this app mints tokens;
+  one `try` makes it a 401 regardless.
+- [ ] **The WebSocket reconnects after a policy close** — `hooks/useWebSocket.ts`
+  retries on every `onclose`, including the deliberate 4001 (invalid token)
+  and 4003 (not a member) from `ws/events.py`. It backs off to 30s, so it's
+  waste rather than a hammer, but a rejected client should stop and say why.
+- [ ] **Rate limiting trusts the first `X-Forwarded-For` entry** —
+  `services/rate_limit.py` says so in its own docstring. Confirm which entry
+  Cloud Run actually gives you before relying on it: if a client-supplied
+  header lands first, the limiter is bypassed by varying one header. Taking
+  the *last* entry is the usual answer behind a single trusted proxy.
 
 ---
 
@@ -415,6 +484,19 @@ Breakdown:
 Lint is deliberately not in CI until these are resolved — a permanently red
 check gets ignored, and a `continue-on-error` check is worse than none.
 
+- [ ] **Add the lint job once the count is zero.** Until then anyone who
+  clones the repo and runs `npm run lint` sees 31 errors, which reads worse
+  than the code is. This is the only one of the three CI checks missing.
+
+### Frontend bundle — one 1.03 MB chunk
+`npm run build` emits a single `index-*.js` of ~1,036 kB (~302 kB gzipped) and
+Vite warns about it every build. Recharts and @dnd-kit are the weight, and
+neither is needed on the login screen. Route-level `React.lazy` on the four
+heavy pages (Analytics, Draft room, Rankings, Assistant) is the cheap version;
+`build.rollupOptions.output.manualChunks` splitting the vendor libs is the
+thorough one. Matters most on the first visit over a phone connection, which
+is exactly the visit a portfolio link gets.
+
 ### Test suite
 - [x] **Order-dependent test fixed** — `conftest.client` shared one
   `expire_on_commit=False` session across every request in a test, so a
@@ -454,7 +536,22 @@ check gets ignored, and a `continue-on-error` check is worse than none.
 
 ## UI / UX Polish
 - [ ] Row height alignment between custom list and source list on Rankings page
-- [ ] Responsive layouts (mobile/tablet)
+- [ ] **Responsive layouts (mobile/tablet)** — the app is desktop-only today:
+  17 breakpoint utilities (`sm:`/`md:`/`lg:`) in the entire `src/` tree, and
+  three layouts with hard minimum widths:
+  - `pages/AnalyticsPage.tsx` — the rankings table is `min-w-[1400px]`, so the
+    flagship page horizontally scrolls even on a 13" laptop.
+  - `components/draft/DraftBoard.tsx` and `pages/LobbyPage.tsx` — inline
+    `minWidth: max(columns * 120, 600)px`.
+  - The lobby's three-column shell (`w-72` sidebars) and the draft room's
+    resizable bottom panel both assume a wide viewport.
+  Worth weighing: recruiters open a portfolio link on a phone as often as not,
+  and this is the first impression. The tables genuinely need horizontal
+  scroll — the honest fix is a scroll container with a sticky first column,
+  not a reflow — but the shells around them should stack.
+- [ ] **No `ErrorBoundary` anywhere** — one render-time exception blanks the
+  page with no message and no way back. A single boundary at the router level,
+  with a "something broke, reload" panel, is most of the value.
 - [ ] Error handling + toast notifications
   - [x] **API errors no longer render as `[object Object]`.** `apiFetch` threw
     `new Error(body.detail)`, but on a 422 FastAPI sends `detail` as a *list of
