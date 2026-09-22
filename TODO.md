@@ -178,19 +178,54 @@ This section is the state of the work.
 - [ ] **`requirements.txt` installs pytest into the production image.** Minor
   (a few MB) but it belongs in a dev-only file, and the same change is a
   natural moment to do the lockfile item below.
-- [ ] **The image has never actually been built.** Everything in the
-  Deployment section above is verified *except* this: Docker Desktop's daemon
-  wasn't running, so `backend/Dockerfile` is correct by inspection only, and
-  `.dockerignore` was checked by simulating Docker's pattern rules rather than
-  by inspecting a real build context. First thing to do before deploying:
+- [x] **The image has been built and verified** (2026-09-21). Previously this
+  was correct by inspection only — the daemon had never run, and
+  `.dockerignore` had been checked by simulating Docker's pattern rules rather
+  than against a real build context. A real build now confirms all of it:
+
+  | Check | Result |
+  | --- | --- |
+  | Builds from the repo root | exit 0, ~600 MB |
+  | `backend/.env` excluded | no `.env` anywhere in the image |
+  | `backend/venv/` excluded | `/app` is 1.9 MB, not 293 MB |
+  | SPA served from the container | `/`, JS and CSS all 200 |
+  | `$PORT` honoured | ran on 8000 inside, mapped to a free host port |
+  | `/healthz` | 200 after a ~3 s cold start, no database touched |
+
+  Also verified against a real empty Postgres 17, run from inside the
+  production image: **every migration applies cleanly from scratch**, which is
+  the same path the Cloud Run `migrate` job in `docs/deploy.md` takes.
+
+  Reproduce with:
 
   ```powershell
   docker build -f backend/Dockerfile -t fantasy-draft .
-  docker run --rm -e PORT=8000 -p 8000:8000 fantasy-draft
-  # then open localhost:8000 -- the full SPA should come from the container
   docker run --rm fantasy-draft sh -c 'ls -la /app/.env 2>&1; du -sh /app'
-  # ^ should say "No such file" and show a small image, not 300+ MB
+  # ^ should say "No such file" and show ~2 MB, not 300+ MB
   ```
+
+  To exercise it end to end, give it a database rather than opening the native
+  one to Docker — a throwaway Postgres on a private network publishes no port,
+  so nothing on the host or LAN can reach it and `pg_hba.conf` stays untouched:
+
+  ```powershell
+  docker network create fd-net
+  docker run -d --name fd-db --network fd-net `
+    -e POSTGRES_USER=fantasy -e POSTGRES_PASSWORD=fantasy_dev `
+    -e POSTGRES_DB=fantasy_draft postgres:17
+  docker run -d --name fd-app --network fd-net -p 8080:8000 -e PORT=8000 `
+    -e APP_DATABASE_URL="postgresql+asyncpg://fantasy:fantasy_dev@fd-db:5432/fantasy_draft" `
+    fantasy-draft
+  docker exec fd-app python -m alembic upgrade head
+  # optional: copy real data in, reading over loopback only
+  #   pg_dump -h localhost -U fantasy -d fantasy_draft --no-owner --no-privileges -f dump.sql
+  #   docker exec -i fd-db psql -U fantasy -d fantasy_draft < dump.sql
+  # teardown, including the volume that `docker rm -f` leaves behind:
+  #   docker rm -f fd-app fd-db; docker network rm fd-net; docker volume prune -f
+  ```
+
+  Do **not** use `docker-compose.yml` for this — it binds 5432 on the host and
+  collides with the native Postgres service.
 
 - [ ] **HTTPS / secrets checklist before first deploy** — `APP_SECRET_KEY` and
   `APP_DATABASE_URL` from Secret Manager, `APP_ENVIRONMENT=production` (which
@@ -376,6 +411,18 @@ check gets ignored, and a `continue-on-error` check is worse than none.
 - [ ] Row height alignment between custom list and source list on Rankings page
 - [ ] Responsive layouts (mobile/tablet)
 - [ ] Error handling + toast notifications
+  - [x] **API errors no longer render as `[object Object]`.** `apiFetch` threw
+    `new Error(body.detail)`, but on a 422 FastAPI sends `detail` as a *list of
+    objects*, which stringifies to exactly that — so every rejected password
+    showed it. `formatApiError` in `api/client.ts` now normalises both shapes.
+    The backend's own `field_validator`s already wrote good sentences; the
+    catch is that `Field(min_length=...)` fires *before* them, so pydantic's
+    robotic phrasing is what a user hits first and it needs handling too.
+  - [ ] **`AnalyticsPage` swallows fetch errors silently** —
+    `.catch(() => setRawData([]))` renders a failed request as an empty table,
+    so "no data loaded" and "the request failed" look identical. This is the
+    highest-value item here: it costs real time to diagnose from the UI alone.
+    `RankingsPage` and `DraftResultsPage` have no error handling at all.
 - [ ] Loading states and skeleton screens
 
 ---
