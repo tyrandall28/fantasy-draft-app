@@ -245,3 +245,79 @@ class TestClaimPosition:
             json={"position": None},
         )
         assert resp.status_code == 200
+
+
+class TestClaimPositionValidation:
+    """The endpoint took a bare `dict` and compared the value to an int."""
+
+    @pytest.mark.parametrize("position", ["abc", [1], {"n": 1}, 1.5])
+    async def test_non_integer_position_is_rejected(self, client, auth_headers, position):
+        create = await client.post("/api/leagues", headers=auth_headers, json={"name": "Claim"})
+        league_id = create.json()["id"]
+        resp = await client.post(
+            f"/api/leagues/{league_id}/claim-position",
+            headers=auth_headers,
+            json={"position": position},
+        )
+        assert resp.status_code == 422
+
+    async def test_out_of_range_still_explains_the_range(self, client, auth_headers):
+        """Range stays in the endpoint so the message can name team_count."""
+        create = await client.post(
+            "/api/leagues", headers=auth_headers, json={"name": "Claim", "team_count": 10}
+        )
+        league_id = create.json()["id"]
+        resp = await client.post(
+            f"/api/leagues/{league_id}/claim-position", headers=auth_headers, json={"position": 99}
+        )
+        assert resp.status_code == 400
+        assert "1-10" in resp.json()["detail"]
+
+
+class TestMemberRankingOwnership:
+    """`ranking_id` was assigned with no check of who owns it."""
+
+    async def test_unknown_ranking_is_rejected(self, client, auth_headers):
+        create = await client.post("/api/leagues", headers=auth_headers, json={"name": "Rank"})
+        league_id = create.json()["id"]
+        resp = await client.patch(
+            f"/api/leagues/{league_id}/members/me",
+            headers=auth_headers,
+            json={"ranking_id": "11111111-1111-1111-1111-111111111111"},
+        )
+        assert resp.status_code == 404
+
+    async def test_another_users_ranking_is_rejected(
+        self, client, auth_headers, auth_headers2, test_players
+    ):
+        source = await client.post(
+            "/api/rankings", headers=auth_headers, json={"source": "espn_ppr", "name": "Mine"}
+        )
+        assert source.status_code == 201
+        ranking_id = source.json()["id"]
+
+        create = await client.post("/api/leagues", headers=auth_headers2, json={"name": "Rank2"})
+        league_id = create.json()["id"]
+
+        resp = await client.patch(
+            f"/api/leagues/{league_id}/members/me",
+            headers=auth_headers2,
+            json={"ranking_id": ranking_id},
+        )
+        assert resp.status_code == 404
+
+    async def test_own_ranking_is_accepted(self, client, auth_headers, test_players):
+        source = await client.post(
+            "/api/rankings", headers=auth_headers, json={"source": "espn_ppr", "name": "Mine"}
+        )
+        ranking_id = source.json()["id"]
+
+        create = await client.post("/api/leagues", headers=auth_headers, json={"name": "Rank3"})
+        league_id = create.json()["id"]
+
+        resp = await client.patch(
+            f"/api/leagues/{league_id}/members/me",
+            headers=auth_headers,
+            json={"ranking_id": ranking_id},
+        )
+        assert resp.status_code == 200

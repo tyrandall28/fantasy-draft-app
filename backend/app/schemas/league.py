@@ -141,6 +141,18 @@ class SetDraftOrderRequest(BaseModel):
     order: list[str] | None = Field(None, max_length=TEAM_COUNT[1])
 
 
+class ClaimPositionRequest(BaseModel):
+    """A draft slot to take, or null to give the one you hold back.
+
+    The endpoint took a bare `dict` and compared `body.get("position")` to an
+    int, so `{"position": "abc"}` raised TypeError and came back as a 500. The
+    1..team_count range stays in the endpoint, which is what knows team_count
+    and can say "Position must be 1-10" instead of a schema error.
+    """
+
+    position: int | None = None
+
+
 class UpdateMemberRequest(BaseModel):
     team_name: str | None = Field(None, max_length=MAX_TEAM_NAME)
     ranking_id: uuid.UUID | None = None

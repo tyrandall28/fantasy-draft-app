@@ -7,9 +7,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, CurrentUser
 from app.models.league import League, LeagueMember
+from app.models.ranking import UserRanking
 from app.models.user import User
 from app.services.auth_service import hash_password
 from app.schemas.league import (
+    ClaimPositionRequest,
     CreateLeagueRequest,
     JoinLeagueRequest,
     LeagueResponse,
@@ -193,7 +195,20 @@ async def update_my_membership(league_id: uuid.UUID, body: UpdateMemberRequest, 
 
     if body.team_name is not None:
         member.team_name = body.team_name
+
     if body.ranking_id is not None:
+        # This was assigned straight through. An id that didn't exist hit the
+        # foreign key and came back as a 500, and one belonging to *someone
+        # else* was accepted — the only endpoint touching a ranking that
+        # didn't check who owns it. Everything in /api/rankings does.
+        owned = await db.execute(
+            select(UserRanking.id).where(
+                UserRanking.id == body.ranking_id,
+                UserRanking.user_id == user.id,
+            )
+        )
+        if owned.first() is None:
+            raise HTTPException(status_code=404, detail="Ranking not found")
         member.ranking_id = body.ranking_id
 
     await db.commit()
@@ -260,7 +275,9 @@ async def remove_bot(league_id: uuid.UUID, bot_user_id: uuid.UUID, user: Current
 
 
 @router.post("/{league_id}/claim-position")
-async def claim_draft_position(league_id: uuid.UUID, body: dict, user: CurrentUser, db: DB):
+async def claim_draft_position(
+    league_id: uuid.UUID, body: ClaimPositionRequest, user: CurrentUser, db: DB
+):
     """User claims an open draft position (1-based). Pass {"position": N} or {"position": null} to release."""
     league = await _get_league_with_members(db, league_id)
     if not league:
@@ -272,7 +289,7 @@ async def claim_draft_position(league_id: uuid.UUID, body: dict, user: CurrentUs
     if not member:
         raise HTTPException(status_code=404, detail="Not a member")
 
-    position = body.get("position")
+    position = body.position
 
     # Release current position
     if position is None:
