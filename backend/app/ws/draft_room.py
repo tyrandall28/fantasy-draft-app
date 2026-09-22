@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.database import async_session
@@ -181,7 +182,21 @@ class DraftRoom:
                 await self._send_error(user_id, "Player already drafted")
                 return
 
-            pick = await make_pick(db, league, uuid.UUID(user_id), player_id, current_pick)
+            try:
+                pick = await make_pick(db, league, uuid.UUID(user_id), player_id, current_pick)
+            except IntegrityError:
+                # The check above and this insert are separated by awaits, and
+                # the auto-pick timer runs on the same loop — so the pick can
+                # be taken in between. The unique constraints on draft_picks
+                # are what actually decide it; this turns losing that race
+                # into a message rather than a dead connection.
+                await db.rollback()
+                await self._send_error(user_id, "That pick was just taken — try again")
+                ws = self.connections.get(user_id)
+                if ws:
+                    await self.send_state(ws)
+                return
+
             await self._broadcast_pick(db, pick, league)
 
     async def _broadcast_pick(self, db, pick: DraftPick, league: League):
@@ -283,7 +298,18 @@ class DraftRoom:
                     stmt = select(League).where(League.id == self.league_id).options(selectinload(League.members))
                     result = await db.execute(stmt)
                     lg = result.scalar_one()
-                    pick = await make_pick(db, lg, uuid.UUID(user_id), player_id, overall_pick, is_auto=True)
+                    try:
+                        pick = await make_pick(
+                            db, lg, uuid.UUID(user_id), player_id, overall_pick, is_auto=True
+                        )
+                    except IntegrityError:
+                        # The human got there first, between the auto-pick
+                        # choosing a player and writing it. Their pick stands
+                        # and already scheduled the next turn; this one just
+                        # stops. Unhandled, it would die as a task exception
+                        # nobody sees and leave the room with no live timer.
+                        await db.rollback()
+                        return
                     await self._broadcast_pick(db, pick, lg)
 
         except asyncio.CancelledError:
