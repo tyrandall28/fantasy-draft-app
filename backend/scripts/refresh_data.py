@@ -4,6 +4,8 @@
     python -m scripts.refresh_data --first-time   # empty database
     python -m scripts.refresh_data --rankings     # draft lists only (fast)
     python -m scripts.refresh_data --stats        # NFL stats only
+    python -m scripts.refresh_data --stats --current-season
+                                                  # what the daily cron runs
     python -m scripts.refresh_data --full-refresh # re-download, don't trust cache
     python -m scripts.refresh_data --dry-run      # show the plan, change nothing
 
@@ -45,6 +47,13 @@ CENSUS = {
     "player_derived_stats": PlayerDerivedStats,
     "base_rankings": BaseRanking,
 }
+
+# Exit codes. A scheduler can only see this number, so it's the whole
+# vocabulary this script has for saying what went wrong.
+EXIT_OK = 0
+EXIT_INGEST_FAILED = 1       # a download or write failed — retrying may help
+EXIT_USAGE = 2               # bad arguments — retrying will never help
+EXIT_HEALTH_WARNING = 3      # data written, but the health check objects to it
 
 STEP_NAMES = {
     1: "external IDs (links our players to nflverse)",
@@ -181,7 +190,13 @@ def show_delta(before: dict[str, int], after: dict[str, int]) -> None:
 async def run(args: argparse.Namespace) -> int:
     started = time.time()
     year = args.year or current_nfl_season()
-    seasons = args.seasons or default_stat_seasons()
+    # --current-season is a named shorthand rather than a hardcoded year, so
+    # the scheduled job's configuration never goes stale. Explicit --seasons
+    # still wins; asking for both is a contradiction, caught in main().
+    if args.current_season:
+        seasons = [current_nfl_season()]
+    else:
+        seasons = args.seasons or default_stat_seasons()
 
     do_rankings = args.rankings or not args.stats
     do_stats = args.stats or not args.rankings
@@ -207,10 +222,10 @@ async def run(args: argparse.Namespace) -> int:
                 print(f"            step {s}: {STEP_NAMES[s]}")
         print("\n  Note: a dry run of stats steps 4-6 reports counts from data already")
         print("  in the database, not from this run. Only steps 1-3 truly dry-run.")
-        return 0
+        return EXIT_OK
 
     if not await preflight():
-        return 1
+        return EXIT_INGEST_FAILED
 
     before = await census()
     ok = True
@@ -243,7 +258,17 @@ async def run(args: argparse.Namespace) -> int:
         print(" Data is loaded and internally consistent. Start the app:")
         print("   backend:   uvicorn app.main:app --reload --port 8000")
         print("   frontend:  npm run dev      (in ../frontend)")
-    return 0 if (ok and doctor_exit == 0) else 1
+
+    # Distinct codes because the two failures want opposite responses from a
+    # scheduler. A failed download is worth retrying; a health-check complaint
+    # is not — the data is already written and re-downloading it will produce
+    # the same complaint, so the right response is to look at it.
+    # Both are non-zero, so anything checking for plain success is unaffected.
+    if not ok:
+        return EXIT_INGEST_FAILED
+    if doctor_exit != 0:
+        return EXIT_HEALTH_WARNING
+    return EXIT_OK
 
 
 def main() -> None:
@@ -260,6 +285,11 @@ def main() -> None:
                    help=f"Season for draft rankings (default: {current_nfl_season()})")
     p.add_argument("--seasons", nargs="+", type=int, default=None,
                    help=f"Seasons for stats (default: {' '.join(map(str, default_stat_seasons()))})")
+    p.add_argument("--current-season", action="store_true",
+                   help="Stats for the in-progress season only (derived from "
+                        "today's date). What the daily scheduled refresh uses: "
+                        "completed seasons never change, so re-downloading four "
+                        "of them every night is waste.")
     p.add_argument("--steps", nargs="+", type=int, choices=[1, 2, 3, 4, 5, 6], default=None,
                    help="Run only these stats steps (default: all)")
     p.add_argument("--full-refresh", action="store_true",
@@ -269,7 +299,11 @@ def main() -> None:
 
     if args.rankings and args.stats:
         print("--rankings and --stats are opposites; omit both to do everything.")
-        raise SystemExit(2)
+        raise SystemExit(EXIT_USAGE)
+
+    if args.current_season and args.seasons:
+        print("--current-season and --seasons both name which seasons to load; pass one.")
+        raise SystemExit(EXIT_USAGE)
 
     raise SystemExit(asyncio.run(run(args)))
 
