@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useAssistantStatus } from "../../hooks/useAssistantStatus";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { enabled: assistantEnabled } = useAssistantStatus();
 
   return (
     <nav className="bg-ink-800 border-b border-ink-600 text-chalk px-6 py-3 flex items-center justify-between">
@@ -20,8 +22,17 @@ export default function Navbar() {
           <Link to="/analytics" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
             Analytics
           </Link>
-          <Link to="/assistant" className="text-sm text-chalk-dim hover:text-chalk transition-colors">
+          {/* The link stays while the feature is held, with the badge saying
+              so. Removing it would leave the page reachable but unadvertised;
+              the badge sets the expectation before the click instead. */}
+          <Link
+            to="/assistant"
+            className="flex items-center gap-1.5 text-sm text-chalk-dim hover:text-chalk transition-colors"
+          >
             Ask AI
+            {assistantEnabled === false && (
+              <span className="badge-sm bg-caution/15 text-caution">Soon</span>
+            )}
           </Link>
           <span className="text-chalk-mut text-sm">{user.username}</span>
           <button

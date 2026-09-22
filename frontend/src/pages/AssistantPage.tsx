@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
 import { askAssistant, type ChatMessage, type TraceStep } from "../api/assistant";
 import AnswerMarkdown from "../components/assistant/AnswerMarkdown";
+import AssistantComingSoon from "../components/assistant/AssistantComingSoon";
+import { useAssistantStatus } from "../hooks/useAssistantStatus";
 
 const SUGGESTIONS = [
   "Who led WRs in touchdowns in 2024?",
@@ -66,6 +68,34 @@ function TracePanel({ trace }: { trace: TraceStep[] }) {
 }
 
 export default function AssistantPage() {
+  const { enabled } = useAssistantStatus();
+  const [seasonsForNotice, setSeasonsForNotice] = useState<number[] | null>(null);
+
+  useEffect(() => {
+    if (enabled !== false) return;
+    apiFetch<number[]>("/api/analytics/seasons")
+      .then((rows) => setSeasonsForNotice(rows.length > 0 ? rows : null))
+      .catch(() => setSeasonsForNotice(null));
+  }, [enabled]);
+
+  // Neither state until the status is known — showing one and swapping to the
+  // other reads as a bug. Matches ProtectedRoute's spinner.
+  if (enabled === null) {
+    return (
+      <div className="flex min-h-[calc(100vh-57px)] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-accent" />
+      </div>
+    );
+  }
+  if (!enabled) {
+    return <AssistantComingSoon examples={SUGGESTIONS} seasons={seasonsForNotice} />;
+  }
+  // Mounted only when the assistant is live, so the chat's own state and its
+  // saved conversation are never touched while the feature is held.
+  return <AssistantChat />;
+}
+
+function AssistantChat() {
   const [messages, setMessages] = useState<DisplayMessage[]>(loadMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

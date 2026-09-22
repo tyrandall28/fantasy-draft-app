@@ -26,6 +26,23 @@ export interface AssistantQueryResponse {
   trace: TraceStep[];
 }
 
+export interface AssistantStatus {
+  enabled: boolean;
+  /** Why it's unavailable, fit to show a user. Null when enabled. */
+  message: string | null;
+}
+
+/**
+ * Whether the assistant is answering questions on this deployment.
+ *
+ * It's held in production (cost control — see the backend's api/assistant.py),
+ * so the page asks first and renders a "coming soon" state instead of offering
+ * an input box that can only produce an error.
+ */
+export async function getAssistantStatus(): Promise<AssistantStatus> {
+  return apiFetch<AssistantStatus>("/api/assistant/status");
+}
+
 /** Send the full visible conversation; the new question is the last message. */
 export async function askAssistant(messages: ChatMessage[]): Promise<AssistantQueryResponse> {
   return apiFetch<AssistantQueryResponse>("/api/assistant/query", {
