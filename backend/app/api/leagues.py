@@ -10,6 +10,7 @@ from app.models.league import League, LeagueMember
 from app.models.ranking import UserRanking
 from app.models.user import User
 from app.services.auth_service import hash_password
+from app.services.league_access import require_participant
 from app.schemas.league import (
     ClaimPositionRequest,
     CreateLeagueRequest,
@@ -114,9 +115,9 @@ async def list_leagues(user: CurrentUser, db: DB):
 
 @router.get("/{league_id}", response_model=LeagueResponse)
 async def get_league(league_id: uuid.UUID, user: CurrentUser, db: DB):
-    league = await _get_league_with_members(db, league_id)
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    # Members only. Any logged-in user could read any league by id, and the
+    # response carries `invite_code` — which is all you need to then join it.
+    league = await require_participant(db, league_id, user.id)
     user_map = await _build_user_map(db, league)
     return _league_response(league, user_map)
 

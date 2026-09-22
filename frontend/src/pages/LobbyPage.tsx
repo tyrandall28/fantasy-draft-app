@@ -222,15 +222,23 @@ export default function LobbyPage() {
               {copied ? "Copied!" : "Copy"}
             </button>
           </div>
-          {league.status === "setup" && (
-            <button
-              onClick={handleStartDraft}
-              disabled={starting}
-              className="bg-rise text-chalk px-5 py-1.5 rounded-lg text-sm font-bold hover:bg-rise disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {starting ? "Starting..." : "Start Draft"}
-            </button>
-          )}
+          {/* Starting the draft is the commissioner's, like every other
+              setting here. The button used to be offered to everyone and the
+              server now refuses it, so say who it's waiting on instead. */}
+          {league.status === "setup" &&
+            (isCommissioner ? (
+              <button
+                onClick={handleStartDraft}
+                disabled={starting}
+                className="bg-rise text-chalk px-5 py-1.5 rounded-lg text-sm font-bold hover:bg-rise disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {starting ? "Starting..." : "Start Draft"}
+              </button>
+            ) : (
+              <span className="text-xs text-chalk-mut">
+                Waiting for the commissioner to start
+              </span>
+            ))}
         </div>
       </div>
 

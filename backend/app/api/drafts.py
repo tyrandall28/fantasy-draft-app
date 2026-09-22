@@ -3,25 +3,24 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, CurrentUser
 from app.models.draft import DraftPick
-from app.models.league import League, LeagueMember
+from app.models.league import LeagueMember
 from app.models.user import User
 from app.services.auth_service import hash_password
+from app.services.league_access import require_commissioner, require_participant
 
 router = APIRouter(prefix="/api/leagues/{league_id}/draft", tags=["draft"])
 
 
 @router.post("/start")
 async def start_draft(league_id: uuid.UUID, user: CurrentUser, db: DB):
-    stmt = select(League).where(League.id == league_id).options(selectinload(League.members))
-    result = await db.execute(stmt)
-    league = result.scalar_one_or_none()
+    # Commissioner only. This had no check of any kind — not membership, not
+    # ownership — so any logged-in user who knew a league id could start that
+    # league's draft, which locks its settings and assigns everyone a slot.
+    league = await require_commissioner(db, league_id, user.id)
 
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
     if league.status != "setup":
         raise HTTPException(status_code=400, detail="Draft already started or completed")
     if len(league.members) < 1:
@@ -83,11 +82,7 @@ async def start_draft(league_id: uuid.UUID, user: CurrentUser, db: DB):
 
 @router.get("/state")
 async def get_draft_state(league_id: uuid.UUID, user: CurrentUser, db: DB):
-    stmt = select(League).where(League.id == league_id).options(selectinload(League.members))
-    result = await db.execute(stmt)
-    league = result.scalar_one_or_none()
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await require_participant(db, league_id, user.id)
 
     picks_stmt = (
         select(DraftPick)
@@ -149,6 +144,8 @@ async def get_draft_state(league_id: uuid.UUID, user: CurrentUser, db: DB):
 
 @router.get("/results")
 async def get_draft_results(league_id: uuid.UUID, user: CurrentUser, db: DB):
+    await require_participant(db, league_id, user.id)
+
     picks_stmt = (
         select(DraftPick)
         .where(DraftPick.league_id == league_id)

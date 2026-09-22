@@ -3,11 +3,10 @@ import json
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from sqlalchemy import select
 
 from app.database import async_session
-from app.models.league import League, LeagueMember
 from app.services.auth_service import decode_token
+from app.services.league_access import is_participant
 from app.ws.draft_room import draft_manager
 
 router = APIRouter()
@@ -16,12 +15,11 @@ router = APIRouter()
 async def _is_league_participant(league_id: uuid.UUID, user_id: str) -> bool:
     """Whether this user is allowed in this league's draft room.
 
-    A member, or the commissioner. The commissioner is checked separately
-    because they own the league whether or not they hold a team in it.
-
-    A malformed user id from a token means no: a UUID that doesn't parse can't
-    match a row, and letting the ValueError escape would surface as a 500 on a
-    connection that should simply be refused.
+    The rule itself lives in `services.league_access`, shared with the REST
+    endpoints so the room and the API can't drift apart on who belongs here.
+    This wrapper opens a session and tolerates a malformed id: a UUID that
+    doesn't parse can't match a row, and letting the ValueError escape would
+    surface as a 500 on a connection that should simply be refused.
     """
     try:
         uid = uuid.UUID(user_id)
@@ -29,19 +27,7 @@ async def _is_league_participant(league_id: uuid.UUID, user_id: str) -> bool:
         return False
 
     async with async_session() as db:
-        result = await db.execute(
-            select(LeagueMember.id).where(
-                LeagueMember.league_id == league_id,
-                LeagueMember.user_id == uid,
-            )
-        )
-        if result.first() is not None:
-            return True
-
-        result = await db.execute(
-            select(League.id).where(League.id == league_id, League.commissioner_id == uid)
-        )
-        return result.first() is not None
+        return await is_participant(db, league_id, uid)
 
 
 @router.websocket("/ws/draft/{league_id}")
