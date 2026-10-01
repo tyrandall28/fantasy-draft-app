@@ -53,6 +53,9 @@ interface ColumnDef {
 
 type CacheKey = `${string}-${number}`;
 
+const formCacheKey = (season: number, rows: PlayerDerivedStats[]) =>
+  `${season}:${rows.map((p) => p.player_id).sort((a, b) => a - b).join(",")}`;
+
 const fmt1 = (v: number | null) => (v != null ? v.toFixed(1) : "-");
 const fmt2 = (v: number | null) => (v != null ? v.toFixed(2) : "-");
 const fmtInt = (v: number | null) => (v != null ? String(Math.round(v)) : "-");
@@ -248,7 +251,7 @@ export default function AnalyticsPage() {
     if (rawData.length === 0 || !showTrend || !season) return;
     let stale = false;
     const ids = rawData.map((p) => p.player_id);
-    const cacheKey = `${season}:${[...ids].sort((a, b) => a - b).join(",")}`;
+    const cacheKey = formCacheKey(season, rawData);
     const cached = formCache.current.get(cacheKey);
     if (cached) {
       setForms(cached);
@@ -269,9 +272,18 @@ export default function AnalyticsPage() {
     };
   }, [rawData, showTrend, season]);
 
+  // `rawData` can briefly hold the previous table: a position click renders
+  // before the fetch effect has swapped the rows. Drawing them anyway cost a
+  // full render of the old table under the new columns on every switch --
+  // most of the switch time, measured -- and flashed WRs under QB headings.
+  // Until the right rows are in, the table shows Loading instead.
+  const tableKey = season ? `${position}-${season}` : null;
+  const tableReady = rawKey === tableKey;
+  const tableData = useMemo(() => (tableReady ? rawData : []), [tableReady, rawData]);
+
   // Sort client-side
   const players = useMemo(() => {
-    return [...rawData].sort((a, b) => {
+    return [...tableData].sort((a, b) => {
       const aVal = a[sortBy] as number | null;
       const bVal = b[sortBy] as number | null;
       if (aVal == null && bVal == null) return 0;
@@ -279,25 +291,25 @@ export default function AnalyticsPage() {
       if (bVal == null) return -1;
       return sortDir === "desc" ? bVal - aVal : aVal - bVal;
     });
-  }, [rawData, sortBy, sortDir]);
+  }, [tableData, sortBy, sortDir]);
 
   // Compare tab: selected players and search results
   const comparePlayers = useMemo(
-    () => rawData.filter((p) => compareIds.includes(p.player_id)),
-    [rawData, compareIds]
+    () => tableData.filter((p) => compareIds.includes(p.player_id)),
+    [tableData, compareIds]
   );
 
   const compareSearchResults = useMemo(() => {
     if (!compareSearch.trim()) return [];
     const q = compareSearch.toLowerCase();
-    return rawData
+    return tableData
       .filter(
         (p) =>
           !compareIds.includes(p.player_id) &&
           p.full_name.toLowerCase().includes(q)
       )
       .slice(0, 8);
-  }, [rawData, compareSearch, compareIds]);
+  }, [tableData, compareSearch, compareIds]);
 
   // Clear compare selections when position changes
   useEffect(() => {
@@ -305,8 +317,23 @@ export default function AnalyticsPage() {
     setCompareSearch("");
   }, [position]);
 
+  // A table already fetched goes on screen in the same render as the click,
+  // rows and sparklines together. Left to the effects, a switch rendered three
+  // times: stale rows, new rows, then new rows again once the sparklines landed.
+  const showCachedTable = (pos: string, s: number | null) => {
+    if (!s) return;
+    const key: CacheKey = `${pos}-${s}`;
+    const rows = cache.current.get(key);
+    if (!rows) return;
+    setRawData(rows);
+    setRawKey(key);
+    const form = formCache.current.get(formCacheKey(s, rows));
+    if (form) setForms(form);
+  };
+
   const selectPosition = (pos: string) => {
     setPosition(pos);
+    showCachedTable(pos, season);
     setFound(null);
     // PPR/G is meaningless for positions without fantasy scoring,
     // so don't land the user on a column of zeros.
@@ -364,7 +391,7 @@ export default function AnalyticsPage() {
   // one; otherwise they degrade to a plain row range. The rank badge beside
   // each name is always the value-metric rank, so it stays true either way.
   const isTier = isTierSort(position, sortBy, sortDir);
-  const ranks = useMemo(() => positionalRanks(rawData, position), [rawData, position]);
+  const ranks = useMemo(() => positionalRanks(tableData, position), [tableData, position]);
 
   // Range of the sorted column, used for both the bar and the brightness ramp.
   // `barMax` is null only for columns declared `signed` (CPOE, EPA), where a
@@ -444,8 +471,10 @@ export default function AnalyticsPage() {
         <select
           value={season ?? ""}
           onChange={(e) => {
-            setSeason(Number(e.target.value));
+            const next = Number(e.target.value);
+            setSeason(next);
             setFound(null);
+            showCachedTable(position, next);
           }}
           className="bg-ink-800 border border-ink-600 text-chalk-dim text-sm rounded-lg px-3 py-1.5"
         >
@@ -560,7 +589,7 @@ export default function AnalyticsPage() {
           <p className="text-chalk-mut text-sm mb-4">
             Median weekly PPR (typical week) vs. standard deviation (how much it swings)
           </p>
-          <BoomBustChart data={rawData} position={position} />
+          <BoomBustChart data={tableData} position={position} />
         </div>
       )}
 
@@ -628,7 +657,7 @@ export default function AnalyticsPage() {
               {/* Radar */}
               <div className="flex-1 min-w-0">
                 <CompareRadarChart
-                  allPlayers={rawData}
+                  allPlayers={tableData}
                   selectedPlayers={comparePlayers}
                   position={position}
                 />
@@ -715,7 +744,7 @@ export default function AnalyticsPage() {
             Volume (target share) vs. opportunity quality (air yards per game).
             Top-right = alpha receivers getting both volume and deep looks.
           </p>
-          <TargetShareAirYardsChart data={rawData} position={position} />
+          <TargetShareAirYardsChart data={tableData} position={position} />
         </div>
       )}
 
@@ -791,9 +820,13 @@ export default function AnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && players.length === 0 ? (
+              {(loading || !tableReady) && players.length === 0 ? (
                 <tr>
-                  <td colSpan={columnCount} className="text-center text-chalk-mut py-16 text-base">
+                  {/* Holds the page at about a table's height. A one-line
+                      placeholder made the page shorter than the window, the
+                      scrollbar dropped out, and everything twitched sideways
+                      by its width -- then back once the rows landed. */}
+                  <td colSpan={columnCount} className="h-[80vh] align-top text-center text-chalk-mut pt-16 text-base">
                     Loading...
                   </td>
                 </tr>
