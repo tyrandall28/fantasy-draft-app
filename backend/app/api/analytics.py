@@ -42,7 +42,7 @@ async def get_position_rankings(
     season: int = Query(2025, description="NFL season year"),
     sort_by: str = Query("ppr_per_game", description="Metric to sort by"),
     sort_dir: str = Query("desc", description="Sort direction (asc or desc)"),
-    min_games: int = Query(3, description="Minimum games played"),
+    min_games: int = Query(1, description="Minimum games played"),
     limit: int = Query(50, description="Max results"),
 ):
     """Position rankings table sorted by any derived stat metric."""
@@ -56,10 +56,11 @@ async def get_position_rankings(
     if limit > 200:
         limit = 200
 
-    # `min_games` filters out small-sample noise, but it can't ask for more games
-    # than the season has supplied. In week 1 every player has games_played=1, so
-    # the default of 3 would match nothing and the page would look empty even
-    # though the data is fully loaded. Clamp to the least-played team's games --
+    # The default is 1: a player back from IR with one big game is exactly who
+    # you want to see, and the table shows games played next to every name.
+    # A caller asking for a higher floor can't ask for more games than the
+    # season has supplied -- in week 1 a floor of 3 would match nothing and the
+    # page would look empty even though the data is fully loaded. Clamp to the least-played team's games --
     # not to `max(week)`, which counts a Thursday night game as a whole week and
     # hides everyone who hasn't played yet. See app.services.season_coverage.
     floor = await season_coverage.min_team_games(db, season)

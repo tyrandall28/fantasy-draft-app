@@ -60,7 +60,7 @@ export function useAnalyticsData() {
           season: String(seasonArg),
           sort_by: "ppr_per_game",
           sort_dir: "desc",
-          min_games: "3",
+          min_games: "1",
           limit: "100",
         });
         const data = await apiFetch<PlayerDerivedStats[]>(

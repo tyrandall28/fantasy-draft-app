@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
       season: String(season),
       sort_by: "ppr_per_game",
       sort_dir: "desc",
-      min_games: "3",
+      min_games: "1",
       limit: "100",
     });
     apiFetch<PlayerDerivedStats[]>(`/api/analytics/position-rankings?${params}`)

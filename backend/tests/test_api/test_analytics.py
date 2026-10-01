@@ -1,6 +1,6 @@
 """Tests for the analytics endpoints, focused on partially-played seasons.
 
-The 2026 season starting exposed a whole class of bug: `min_games` defaults to 3,
+The 2026 season starting exposed a whole class of bug: `min_games` defaulted to 3,
 but in week 1 every player has exactly one game, so every consumer of derived
 stats returned nothing while the data was fully loaded. These pin the fix.
 
@@ -120,6 +120,25 @@ class TestPositionRankingsPartialSeason:
         # 5 weeks played, so min_games=3 applies unclamped and excludes the
         # one-game player despite his flashy per-game average.
         assert names == ["Played Every Week"]
+
+    async def test_default_shows_a_player_who_missed_games(
+        self, client, auth_headers, db_session
+    ):
+        """No floor by default: a starter back from IR with one game is the
+        player most worth watching, not one to hide."""
+        healthy = await _make_player(db_session, "Played Every Week")
+        await _add_season(db_session, healthy, 2026, weeks=5, ppr_per_game=15.0)
+        back = await _make_player(db_session, "Back From IR")
+        await _add_season(db_session, back, 2026, weeks=1, ppr_per_game=20.0)
+        await db_session.commit()
+
+        resp = await client.get(
+            "/api/analytics/position-rankings",
+            params={"position": "WR", "season": 2026},
+            headers=auth_headers,
+        )
+        names = [r["full_name"] for r in resp.json()]
+        assert names == ["Back From IR", "Played Every Week"]
 
     async def test_thursday_night_refresh_does_not_hide_the_other_teams(
         self, client, auth_headers, db_session
