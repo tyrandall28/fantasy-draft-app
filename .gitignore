@@ -36,6 +36,8 @@ backend/rankings_ingester/backups/
 # Misc
 # Local notes / prompt scratch - not useful to a reader of the repo.
 claude.md
+# Personal study tracker for walking through this codebase. Same deal.
+LEARNING.md
 
 # Screenshots
 # Working screenshots pasted in for review are noise in the history. The four

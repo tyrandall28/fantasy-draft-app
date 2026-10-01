@@ -505,9 +505,10 @@ is exactly the visit a portfolio link gets.
   request now gets its own session, matching production.
 - [ ] **WebSocket integration tests** — the draft room has no end-to-end test
   covering connect / pick / timer / broadcast.
-- [ ] **AI assistant tests** — `assistant_tools.py` and `assistant_service.py`
-  have no coverage. The tool functions are pure DB queries and easy to test;
-  the agentic loop needs a stubbed client.
+- [ ] **AI assistant tests** — partly covered: `test_assistant_tools.py` tests
+  `get_stat_leaders` and the data-coverage helpers. Still untested:
+  `compare_players`, `get_player_profile`, and the agentic loop in
+  `assistant_service.py`, which needs a stubbed client.
 
 ### Analytics metrics
 - [x] **`td_rate` was a duplicate of `tds_per_game` under a misleading name** —
@@ -571,7 +572,7 @@ is exactly the visit a portfolio link gets.
 
 ## Draft / CPU Logic
 - [x] **Smarter CPU positional drafting** — CPUs currently pick best available by rank regardless of position. They should respect roster needs (e.g. don't draft 8 WRs). Should factor in `position_slots` config, track what positions the CPU team already has, and prioritize unfilled starting slots before bench picks. All major fantasy platforms (ESPN, Sleeper, Yahoo) do this.
-- [ ] **CPU draft variance** — add slight randomization so not all CPUs draft identically from the same source list (e.g. pick from top 3 available instead of always #1)
+- [x] **CPU draft variance** — add slight randomization so not all CPUs draft identically from the same source list (e.g. pick from top 3 available instead of always #1). Done: `pick_with_variance` in `app/services/draft_service.py` makes a weighted random choice among the top eligible candidates.
 
 ## League Settings
 - [x] Team count selector (6/8/10/12/14)

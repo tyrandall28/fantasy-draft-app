@@ -139,7 +139,7 @@ fantasy-draft-app/
 │   │   ├── refresh_data.py     # one-command refresh, then verify
 │   │   └── reset_db.py         # wipe everything (dev only)
 │   ├── alembic/versions/       # migrations
-│   └── tests/                  # 198 tests, SQLite-backed
+│   └── tests/                  # 310 tests, SQLite-backed
 └── frontend/
     └── src/
         ├── pages/              # Login, Dashboard, Rankings, Lobby, DraftRoom, Analytics, Assistant
@@ -189,7 +189,7 @@ Details in [RUNBOOK.md § Refresh the data](RUNBOOK.md#3-refresh-the-data).
 
 ```powershell
 cd backend
-python -m pytest -q                 # 198 tests, in-memory SQLite, no Postgres needed
+python -m pytest -q                 # 310 tests, in-memory SQLite, no Postgres needed
 ```
 
 CI additionally applies every migration to an empty PostgreSQL database and runs
@@ -249,5 +249,5 @@ Working: auth, rankings, leagues, live draft with CPU opponents, stats
 ingestion, analytics, and the AI assistant (phase 1).
 
 Known issues and next steps are tracked in **[TODO.md](TODO.md)** — the notable
-ones being draft turn enforcement (currently disabled), 31 outstanding ESLint
-errors, and deployment to GCP.
+ones being failed requests that render silently (no error boundary yet), a
+desktop-only layout, 31 outstanding ESLint errors, and deployment to GCP.
