@@ -6,10 +6,12 @@ import CompareRadarChart, { PLAYER_COLORS } from "../components/analytics/Compar
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
 import FormSparkline from "../components/analytics/FormSparkline";
 import PlayerHeadshot from "../components/analytics/PlayerHeadshot";
+import PlayerFinder from "../components/analytics/PlayerFinder";
+import PlayerSearchBox from "../components/analytics/PlayerSearchBox";
 import PositionDataNotice from "../components/analytics/PositionDataNotice";
 import { hasFantasyPoints, positionNotice } from "../lib/positionData";
 import { isTierSort, positionalRanks, tierBandAt } from "../lib/tiers";
-import type { PlayerDerivedStats, RecentFormData, SeasonInfo } from "../types";
+import type { Player, PlayerDerivedStats, RecentFormData, SeasonInfo } from "../types";
 
 // Leads with the part the "Last 8" header can't carry: it's eight games the
 // *team* played, which is why a missed game still takes a slot.
@@ -25,6 +27,11 @@ const TREND_HELP =
 type ViewTab = "rankings" | "boom-bust" | "compare" | "target-air";
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K"] as const;
+
+// Rows per position table. The API's ceiling, and enough for every player with
+// a game this season -- at 100 the find box couldn't reach WR #140, who was
+// in the database but not on the page.
+const TABLE_LIMIT = 200;
 
 type SortField = keyof PlayerDerivedStats;
 
@@ -114,6 +121,14 @@ const DEFAULT_SORT_BY_POSITION: Record<string, SortField> = {
 
 const SMALL_SAMPLE_THRESHOLD = 8;
 
+// The row the find box landed on: an accent frame drawn with inset shadows,
+// since a border on a border-separate table would shift every cell by a pixel.
+// Accent because it's selection state, not data. Spelled out in full per cell
+// -- the left edge carries the bar, the right edge closes the frame.
+const FOCUS_FIRST_CELL = "bg-ink-700 shadow-[inset_3px_0_0_var(--color-accent),inset_0_1px_0_var(--color-accent),inset_0_-1px_0_var(--color-accent)]";
+const FOCUS_MID_CELL = "bg-ink-700 shadow-[inset_0_1px_0_var(--color-accent),inset_0_-1px_0_var(--color-accent)]";
+const FOCUS_LAST_CELL = "bg-ink-700 shadow-[inset_-1px_0_0_var(--color-accent),inset_0_1px_0_var(--color-accent),inset_0_-1px_0_var(--color-accent)]";
+
 // Brightness ramp for the sorted column: the good end of the column reads as
 // elite and the tail recedes, so a glance at the grid tells you where the value
 // sits without reading the digits. Most metrics here are higher-is-better, but
@@ -147,6 +162,15 @@ export default function AnalyticsPage() {
   const formCache = useRef<Map<string, RecentFormData>>(new Map());
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareSearch, setCompareSearch] = useState("");
+  // Which position-season `rawData` holds. A find that switches position waits
+  // for this to match before deciding whether the player is in the table, so
+  // it never checks against the previous position's rows.
+  const [rawKey, setRawKey] = useState<CacheKey | null>(null);
+  // The player last picked from the find box, until you move on. Whether that
+  // means a highlighted row or a "not in this table" note is worked out below
+  // from the table actually on screen, not stored.
+  const [found, setFound] = useState<Player | null>(null);
+  const focusRowRef = useRef<HTMLTableRowElement | null>(null);
 
   const currentSeasonInfo = useMemo(
     () => seasonInfo.find((info) => info.season === season) ?? null,
@@ -182,6 +206,7 @@ export default function AnalyticsPage() {
     const cached = cache.current.get(key);
     if (cached) {
       setRawData(cached);
+      setRawKey(key);
       return;
     }
     setLoading(true);
@@ -191,15 +216,21 @@ export default function AnalyticsPage() {
       sort_by: "ppr_per_game",
       sort_dir: "desc",
       min_games: "1",
-      limit: "100",
+      limit: String(TABLE_LIMIT),
     });
     apiFetch<PlayerDerivedStats[]>(`/api/analytics/position-rankings?${params}`)
       .then((data) => {
         cache.current.set(key, data);
-        if (!stale) setRawData(data);
+        if (!stale) {
+          setRawData(data);
+          setRawKey(key);
+        }
       })
       .catch(() => {
-        if (!stale) setRawData([]);
+        if (!stale) {
+          setRawData([]);
+          setRawKey(key);
+        }
       })
       .finally(() => {
         if (!stale) setLoading(false);
@@ -274,6 +305,58 @@ export default function AnalyticsPage() {
     setCompareSearch("");
   }, [position]);
 
+  const selectPosition = (pos: string) => {
+    setPosition(pos);
+    setFound(null);
+    // PPR/G is meaningless for positions without fantasy scoring,
+    // so don't land the user on a column of zeros.
+    setSortBy(DEFAULT_SORT_BY_POSITION[pos] ?? "ppr_per_game");
+    setSortDir("desc");
+    if (activeTab === "target-air" && pos !== "WR" && pos !== "TE") {
+      setActiveTab("rankings");
+    }
+  };
+
+  const pickFound = (pick: Player) => {
+    setActiveTab("rankings");
+    if (pick.position !== position) selectPosition(pick.position);
+    setFound(pick);
+  };
+
+  // Decided only once the found player's own table has loaded -- until then
+  // `rawData` may still be the previous position's rows. Then: highlight the
+  // row, or say plainly that they aren't in it rather than scroll to nothing.
+  const foundTableReady =
+    found != null && season != null && rawKey === `${found.position}-${season}`;
+  const foundInTable =
+    foundTableReady && rawData.some((r) => r.player_id === found.id);
+  const focusId = foundInTable ? found.id : null;
+  const findMiss = foundTableReady && !foundInTable ? found : null;
+
+  useEffect(() => {
+    if (focusId != null) {
+      focusRowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [focusId]);
+
+  // The highlight stays while you read the row and goes once you move on: a
+  // click anywhere else, or Escape.
+  useEffect(() => {
+    if (focusId == null) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (!focusRowRef.current?.contains(e.target as Node)) setFound(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFound(null);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [focusId]);
+
   const columns = COLUMNS_BY_POSITION[position] || COLUMNS_BY_POSITION["QB"];
   const columnCount = columns.length + (showTrend ? 2 : 1);
 
@@ -331,16 +414,7 @@ export default function AnalyticsPage() {
             return (
               <button
                 key={pos}
-                onClick={() => {
-                  setPosition(pos);
-                  // PPR/G is meaningless for positions without fantasy scoring,
-                  // so don't land the user on a column of zeros.
-                  setSortBy(DEFAULT_SORT_BY_POSITION[pos] ?? "ppr_per_game");
-                  setSortDir("desc");
-                  if (activeTab === "target-air" && pos !== "WR" && pos !== "TE") {
-                    setActiveTab("rankings");
-                  }
-                }}
+                onClick={() => selectPosition(pos)}
                 title={notice ? notice.title : undefined}
                 className={`seg-item flex items-center gap-1.5 ${
                   position === pos
@@ -369,7 +443,10 @@ export default function AnalyticsPage() {
 
         <select
           value={season ?? ""}
-          onChange={(e) => setSeason(Number(e.target.value))}
+          onChange={(e) => {
+            setSeason(Number(e.target.value));
+            setFound(null);
+          }}
           className="bg-ink-800 border border-ink-600 text-chalk-dim text-sm rounded-lg px-3 py-1.5"
         >
           {seasonInfo.map((info) => (
@@ -379,6 +456,8 @@ export default function AnalyticsPage() {
             </option>
           ))}
         </select>
+
+        <PlayerFinder positions={POSITIONS} onPick={pickFound} />
 
         {/* View tabs */}
         <div className="seg ml-auto">
@@ -449,6 +528,29 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {findMiss && season && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-ink-600 bg-ink-800 px-4 py-2.5 text-sm text-chalk-dim">
+          <span>
+            <span className="text-chalk font-medium">{findMiss.full_name}</span> isn't in
+            the {season} {findMiss.position} table — no games played this season
+            {rawData.length >= TABLE_LIMIT && <>, or ranked below the top {TABLE_LIMIT}</>}.
+          </span>
+          <button
+            onClick={() => openPlayerCard(findMiss.id)}
+            className="text-chalk-mut hover:text-chalk underline underline-offset-4 decoration-chalk-mut"
+          >
+            Open player card
+          </button>
+          <button
+            onClick={() => setFound(null)}
+            aria-label="Dismiss"
+            className="ml-auto text-chalk-mut hover:text-chalk text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Boom/Bust Scatter Chart */}
       {activeTab === "boom-bust" && (
         <div className="panel rounded-xl p-5">
@@ -499,32 +601,20 @@ export default function AnalyticsPage() {
 
             {/* Search input */}
             {compareIds.length < 3 && (
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder={compareIds.length === 0 ? "Search players to compare..." : "Add another player..."}
-                  value={compareSearch}
-                  onChange={(e) => setCompareSearch(e.target.value)}
-                  className="bg-ink-800 border border-ink-600 text-chalk text-sm rounded-lg px-3 py-1.5 w-64 placeholder:text-chalk-mut focus:outline-none focus:border-chalk-mut"
-                />
-                {compareSearchResults.length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-full panel-float z-10 overflow-hidden">
-                    {compareSearchResults.map((p) => (
-                      <button
-                        key={p.player_id}
-                        onClick={() => {
-                          setCompareIds((ids) => [...ids, p.player_id]);
-                          setCompareSearch("");
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm text-chalk-dim hover:bg-ink-700 hover:text-chalk"
-                      >
-                        {p.full_name}
-                        <span className="text-chalk-mut ml-2 text-xs">{p.nfl_team}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <PlayerSearchBox
+                value={compareSearch}
+                onChange={setCompareSearch}
+                results={compareSearchResults.map((p) => ({
+                  id: p.player_id,
+                  name: p.full_name,
+                  detail: p.nfl_team,
+                }))}
+                onPick={(id) => {
+                  setCompareIds((ids) => [...ids, id]);
+                  setCompareSearch("");
+                }}
+                placeholder={compareIds.length === 0 ? "Search players to compare..." : "Add another player..."}
+              />
             )}
           </div>
 
@@ -730,6 +820,7 @@ export default function AnalyticsPage() {
                   const band = tierBandAt(i, position, isTier);
                   const rank = ranks.get(p.player_id);
                   const shortSample = seasonComplete && p.games_played < SMALL_SAMPLE_THRESHOLD;
+                  const focused = p.player_id === focusId;
 
                   const rows = [];
                   if (band) {
@@ -753,8 +844,14 @@ export default function AnalyticsPage() {
                   }
 
                   rows.push(
-                    <tr key={p.player_id} className="group">
-                      <td className="sticky left-0 z-10 bg-ink-800 group-hover:bg-ink-700 border-b border-ink-600/60 px-5 py-4 transition-colors">
+                    <tr
+                      key={p.player_id}
+                      ref={focused ? focusRowRef : undefined}
+                      className="group"
+                    >
+                      <td className={`sticky left-0 z-10 group-hover:bg-ink-700 border-b border-ink-600/60 px-5 py-4 transition-colors ${
+                        focused ? FOCUS_FIRST_CELL : "bg-ink-800"
+                      }`}>
                         <div className="flex items-center gap-3">
                           <span className="text-chalk-mut text-xs tnum w-6 shrink-0 text-right">
                             {i + 1}
@@ -781,12 +878,14 @@ export default function AnalyticsPage() {
                       </td>
 
                       {showTrend && (
-                        <td className="text-center px-4 py-4 border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors">
+                        <td className={`text-center px-4 py-4 border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors ${
+                          focused ? FOCUS_MID_CELL : ""
+                        }`}>
                           <FormSparkline form={forms[p.player_id] ?? null} />
                         </td>
                       )}
 
-                      {columns.map((col) => {
+                      {columns.map((col, ci) => {
                         const val = p[col.key] as number | null;
                         const active = sortBy === col.key;
                         // No bar on a lower-is-better column: length reads as
@@ -809,6 +908,8 @@ export default function AnalyticsPage() {
                             key={col.key}
                             className={`relative text-right px-3 py-4 stat-num text-sm border-b border-ink-600/60 group-hover:bg-ink-700 transition-colors ${
                               active ? "text-chalk" : "text-chalk-dim"
+                            } ${
+                              !focused ? "" : ci === columns.length - 1 ? FOCUS_LAST_CELL : FOCUS_MID_CELL
                             }`}
                           >
                             {fill > 0 && (

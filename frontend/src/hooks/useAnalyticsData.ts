@@ -61,7 +61,7 @@ export function useAnalyticsData() {
           sort_by: "ppr_per_game",
           sort_dir: "desc",
           min_games: "1",
-          limit: "100",
+          limit: "200",
         });
         const data = await apiFetch<PlayerDerivedStats[]>(
           `/api/analytics/position-rankings?${params}`
