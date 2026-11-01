@@ -24,6 +24,45 @@ The deploy plan itself (`docs/deploy.md`) was reviewed and holds up: the
 WebSocket request timeout, `--max-instances=1`, migrations as a one-off job,
 and Secret Manager are all handled there and none of it needs revisiting.
 
+## Flagged in agent review — needs my review (2026-10-31)
+
+Raised by an AI agent while it read the code to write interview prep. **None
+of these has been confirmed by me yet.** Each one says where to look and why it
+was flagged. Read the code, decide whether it's real, then fix it, move it to
+the right section, or delete it with a note on why.
+
+- [ ] **bcrypt blocks the event loop.** `hash_password` / `verify_password`
+  (`app/services/auth_service.py`) are CPU-bound (~100 ms by design) and are
+  called directly inside `async def` routes in `app/api/auth.py`. While one
+  login or register runs, every other request, draft timer and WebSocket on
+  the process waits. Possible fixes: `await asyncio.to_thread(...)`, or make
+  those routes plain `def` so FastAPI runs them in its threadpool.
+- [ ] **Login timing reveals which emails have accounts.** `login` returns the
+  same "Invalid credentials" either way, but an unknown email skips
+  `verify_password`, so it answers ~100 ms faster. Usual fix: verify against a
+  fixed dummy hash when the user doesn't exist.
+- [ ] **Rankings validation warns but still loads.** `_validate_entries` in
+  `rankings_ingester/main.py` detects fewer than 100 entries, duplicate names
+  and ranks not starting at 1, but `run_ingestion` only logs them and goes on
+  to `load_rankings`, so a truncated feed would replace a good list. That goes
+  against the fail-loudly rule. Possible fix: abort on those checks unless a
+  `--force` flag is passed.
+- [ ] **Ranking locks aren't enforced.** `RankingList.tsx` `handleDragEnd`
+  only refuses to drag a locked player; dropping another player across it
+  still shifts its rank. `reorder_entries` (`app/services/ranking_service.py`)
+  never checks locks, and doesn't check that `entry_ids` is a full permutation
+  of the ranking's entries (a partial list leaves duplicate ranks).
+- [ ] **A second tab replaces the first in the draft room.**
+  `DraftRoom.connections` (`app/ws/draft_room.py`) is a dict keyed by user id,
+  so a user who opens the draft twice overwrites their first socket, and the
+  first tab silently stops receiving updates. Possible fix: a set of sockets
+  per user.
+- [ ] **The pick timer restarts from full after a server restart.** Picks
+  survive in Postgres, but the room is rebuilt when the first client
+  reconnects and `start_draft_timer` schedules the current turn with the full
+  `pick_time_seconds`. Possible fix: store the turn's deadline as a timestamp
+  and resume from it.
+
 ## Auth & Security (Pre-Launch)
 
 ### Critical
