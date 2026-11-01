@@ -81,10 +81,11 @@ the rows back. A metric enum means the model can't request a column that doesn't
 exist, and every response carries a debug trace of the model's reasoning, the
 tools it chose, the exact arguments, and token usage.
 
-**Off in the hosted demo.** Every question costs Anthropic credits and the
-endpoint has no per-user quota yet, so a public deploy is an open tab on
-someone else's bill — the app shows a "coming soon" page there instead. It runs
-locally with `APP_ANTHROPIC_API_KEY` set; everything else works without one.
+**Held for the public deploy.** Every question costs Anthropic credits and the
+endpoint has no per-user quota yet, so a public deploy would be an open tab on
+someone else's bill. The deploy sets `APP_ASSISTANT_ENABLED=false` and leaves
+the key unset, and the page shows "coming soon" instead. It runs locally with
+`APP_ANTHROPIC_API_KEY` set; everything else works without one.
 
 ## Architecture
 
@@ -117,7 +118,9 @@ Two independent pipelines: draft rankings (fast, refreshed often) and NFL stats
 fantasy-draft-app/
 ├── RUNBOOK.md                  # how to run and refresh everything
 ├── TODO.md                     # known issues and roadmap
-├── .github/workflows/ci.yml    # tests, migration check, frontend build
+├── docker-compose.yml          # local Postgres 17, if you don't have one
+├── docs/                       # deploy plan, scheduled refresh, original concept
+├── .github/workflows/ci.yml    # tests, migration check, lint, frontend build
 ├── backend/
 │   ├── app/
 │   │   ├── main.py             # FastAPI entry point
@@ -151,26 +154,33 @@ fantasy-draft-app/
 
 ## Quick start
 
-Full instructions, including first-time database setup, are in
-**[RUNBOOK.md](RUNBOOK.md)**. If everything is already installed:
+Needs Python 3.12, Node 20+, and either PostgreSQL 17 or Docker. It was built on
+Windows, so the commands are PowerShell; the one line that differs in bash is
+marked.
 
 ```powershell
-# Terminal 1 — backend
+# Database: skip this if Postgres is already installed and create the user by
+# hand instead (RUNBOOK.md, first-time setup, step 1).
+docker compose up -d
+
+# Backend
 cd backend
-.\venv\Scripts\Activate.ps1
-python -m scripts.doctor            # verify data health
+python -m venv venv
+.\venv\Scripts\Activate.ps1                  # bash: source venv/bin/activate
+pip install -r requirements.txt
+python -m alembic upgrade head
+python -m scripts.refresh_data --first-time  # rankings + five seasons of stats, a few minutes
 uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — frontend
+# Frontend, in a second terminal
 cd frontend
+npm install
 npm run dev
 ```
 
 Frontend at http://localhost:5173, API docs at http://localhost:8000/docs.
-
-> PostgreSQL runs natively here as the `postgresql-x64-17` service. The
-> `docker-compose.yml` in this repo is vestigial — using it starts a second,
-> empty database on the same port. See the RUNBOOK.
+Everything after the first run (refreshing data, troubleshooting, what the
+health check means) is in **[RUNBOOK.md](RUNBOOK.md)**.
 
 ## Refreshing data
 
@@ -194,7 +204,8 @@ python -m pytest -q                 # 310 tests, in-memory SQLite, no Postgres n
 
 CI additionally applies every migration to an empty PostgreSQL database and runs
 `alembic check` to prove the models and the migrations agree — the drift guard
-that catches a table which only ever existed on someone's laptop.
+that catches a table which only ever existed on someone's laptop. On the
+frontend it runs ESLint (zero warnings allowed) and the typecheck and build.
 
 ## Environment variables
 
@@ -210,6 +221,7 @@ gitignored `backend/.env`.
 | `APP_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `APP_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
 | `APP_ANTHROPIC_API_KEY` | _(unset)_ | Enables the AI assistant; without it that page returns a clear 503 |
+| `APP_ASSISTANT_ENABLED` | `true` | Feature flag for the assistant. It answers only when this is true *and* a key is set |
 | `APP_ASSISTANT_MODEL` | `claude-opus-5` | Model for the assistant |
 
 ## API
@@ -246,8 +258,14 @@ gitignored `backend/.env`.
 ## Status
 
 Working: auth, rankings, leagues, live draft with CPU opponents, stats
-ingestion, analytics, and the AI assistant (phase 1).
+ingestion, analytics, and the AI assistant (phase 1). Not yet deployed; the
+plan for GCP Cloud Run is in [docs/deploy.md](docs/deploy.md).
 
-Known issues and next steps are tracked in **[TODO.md](TODO.md)** — the notable
-ones being failed requests that render silently (no error boundary yet), a
-desktop-only layout, 31 outstanding ESLint errors, and deployment to GCP.
+Known issues and next steps are tracked in **[TODO.md](TODO.md)**, the main ones
+being failed requests that render silently (no error boundary yet) and a
+desktop-only layout. The project started from a one-page pitch, kept as
+[docs/concept.md](docs/concept.md).
+
+## License
+
+[MIT](LICENSE).

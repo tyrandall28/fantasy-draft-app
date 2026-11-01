@@ -1,3 +1,11 @@
+# Original concept
+
+*The pitch this project started from (March 2026), kept unedited. Everything in
+the numbered list shipped except the mobile layout; of the "future items", the
+stats page and the chatbot became the analytics page and the AI assistant.*
+
+---
+
 This project is a web app for assisting and facilitating NFL fantasy football drafts. The core functionality is an online ranking list where users can choose from several different "Top 300" lists,
 such as ESPN's PPR top 300, and the users can then simply drag and drop players around according to how they see fit. For example, if they believe that the number 4 overall pick should really be the 2nd overall pick,
 they can just simply click and drag that player up into the 2nd spot. This allows for unlimited customizable freedom with draft ranking lists instead of using a universal list as most fantasy football 

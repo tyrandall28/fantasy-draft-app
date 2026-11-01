@@ -49,9 +49,10 @@ If `Status` isn't `Running`:
 Start-Service postgresql-x64-17
 ```
 
-> There is a `docker-compose.yml` in this repo. **Ignore it.** This machine runs
-> Postgres natively; the compose file is left over from the original setup and
-> using it would start a *second*, empty database on the same port.
+> **This machine runs Postgres natively, so ignore `docker-compose.yml` here.**
+> Running it as well would start a *second*, empty database on the same port and
+> everything would look mysteriously broken. The compose file is for a machine
+> with no Postgres installed — see First-time setup, Step 1.
 
 ### Backend
 
@@ -85,7 +86,10 @@ downloads.
 
 ### Step 1 — Postgres database and user
 
-Once per machine. Using `psql` as the superuser:
+Once per machine. **No Postgres installed?** From the repo root,
+`docker compose up -d` starts Postgres 17 on port 5432 with this user and
+database already created; skip to Step 2. Otherwise, using `psql` as the
+superuser:
 
 ```powershell
 psql -U postgres -c "CREATE USER fantasy WITH PASSWORD 'fantasy_dev';"
@@ -481,7 +485,7 @@ Frontend, from `frontend/`:
 |---------|--------------|
 | `npm run dev` | Dev server on :5173 |
 | `npm run build` | Typecheck and production build |
-| `npm run lint` | ESLint — **currently reports 31 pre-existing errors**, tracked in `TODO.md` |
+| `npm run lint` | ESLint; clean, and CI fails on any error or warning |
 
 ### Adding a season by hand
 

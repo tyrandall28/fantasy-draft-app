@@ -1,8 +1,14 @@
-version: "3.9"
-
+# Local Postgres for a machine that doesn't already run one. Creates the same
+# user, password and database as RUNBOOK.md's first-time setup, so the backend's
+# defaults connect to it with no configuration. Dev credentials only.
+#
+#   docker compose up -d
+#
+# If Postgres is already installed natively, don't run this as well: it binds
+# the same port 5432.
 services:
   db:
-    image: postgres:15
+    image: postgres:17
     environment:
       POSTGRES_USER: fantasy
       POSTGRES_PASSWORD: fantasy_dev
