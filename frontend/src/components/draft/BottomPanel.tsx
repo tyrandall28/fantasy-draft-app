@@ -330,7 +330,7 @@ function RankingsTab() {
     apiFetch<UserRanking[]>("/api/rankings").then(setRankings);
     apiFetch<{ value: string; label: string }[]>("/api/rankings/sources").then((s) => {
       setSources(s);
-      if (s.length > 0 && !selectedSource) setSelectedSource(s[0].value);
+      if (s.length > 0) setSelectedSource((current) => current || s[0].value);
     });
   }, []);
 

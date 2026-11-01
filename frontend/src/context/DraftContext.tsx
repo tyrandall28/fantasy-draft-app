@@ -1,27 +1,8 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { getValidAccessToken } from "../api/client";
 import { useWebSocket } from "../hooks/useWebSocket";
-import type { DraftPick, DraftState } from "../types";
-
-interface DraftContextType {
-  leagueId: string;
-  state: DraftState | null;
-  connected: boolean;
-  makePick: (playerId: number) => void;
-  toggleTimer: (enabled: boolean) => void;
-  undoPick: () => void;
-  myPicks: DraftPick[];
-  draftedPlayerIds: Set<number>;
-}
-
-const DraftContext = createContext<DraftContextType | null>(null);
+import type { DraftState } from "../types";
+import { DraftContext, type DraftServerEvent } from "./draft";
 
 interface Props {
   leagueId: string;
@@ -36,7 +17,8 @@ export function DraftProvider({ leagueId, children }: Props) {
 
   const getToken = useCallback(() => getValidAccessToken(), []);
 
-  const handleMessage = useCallback((data: any) => {
+  const handleMessage = useCallback((message: unknown) => {
+    const data = message as DraftServerEvent;
     switch (data.event) {
       case "draft_state":
         setState({
@@ -57,7 +39,7 @@ export function DraftProvider({ leagueId, children }: Props) {
       case "pick_made":
         setState((prev) => {
           if (!prev) return prev;
-          const newPicks = [...prev.picks, data as DraftPick];
+          const newPicks = [...prev.picks, data];
           const nextPick = prev.current_pick + 1;
           return { ...prev, picks: newPicks, current_pick: nextPick };
         });
@@ -141,10 +123,4 @@ export function DraftProvider({ leagueId, children }: Props) {
       {children}
     </DraftContext.Provider>
   );
-}
-
-export function useDraft() {
-  const ctx = useContext(DraftContext);
-  if (!ctx) throw new Error("useDraft must be used within DraftProvider");
-  return ctx;
 }

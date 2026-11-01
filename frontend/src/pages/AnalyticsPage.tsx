@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
-import { usePlayerCard } from "../context/PlayerCardContext";
+import { usePlayerCard } from "../context/playerCard";
 import BoomBustChart from "../components/analytics/BoomBustChart";
-import CompareRadarChart, { PLAYER_COLORS } from "../components/analytics/CompareRadarChart";
+import CompareRadarChart from "../components/analytics/CompareRadarChart";
+import { COMPARE_PLAYER_COLORS as PLAYER_COLORS } from "../lib/compareColors";
 import TargetShareAirYardsChart from "../components/analytics/TargetShareAirYardsChart";
 import FormSparkline from "../components/analytics/FormSparkline";
 import PlayerHeadshot from "../components/analytics/PlayerHeadshot";
@@ -311,12 +312,6 @@ export default function AnalyticsPage() {
       .slice(0, 8);
   }, [tableData, compareSearch, compareIds]);
 
-  // Clear compare selections when position changes
-  useEffect(() => {
-    setCompareIds([]);
-    setCompareSearch("");
-  }, [position]);
-
   // A table already fetched goes on screen in the same render as the click,
   // rows and sparklines together. Left to the effects, a switch rendered three
   // times: stale rows, new rows, then new rows again once the sparklines landed.
@@ -333,6 +328,9 @@ export default function AnalyticsPage() {
 
   const selectPosition = (pos: string) => {
     setPosition(pos);
+    // A comparison only makes sense within one position.
+    setCompareIds([]);
+    setCompareSearch("");
     showCachedTable(pos, season);
     setFound(null);
     // PPR/G is meaningless for positions without fantasy scoring,

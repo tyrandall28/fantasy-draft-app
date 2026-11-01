@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api/client";
-import { usePlayerCard } from "../../context/PlayerCardContext";
+import { usePlayerCard } from "../../context/playerCard";
 import type { Player, UserRanking, UserRankingDetail } from "../../types";
 import { positionBadge } from "../../lib/positionColors";
 
@@ -15,7 +15,11 @@ export default function AvailablePlayerList({ draftedPlayerIds, onPick, canPick 
   const { openPlayerCard } = usePlayerCard();
   const [rankings, setRankings] = useState<UserRanking[]>([]);
   const [selectedRankingId, setSelectedRankingId] = useState<string>("");
-  const [rankingDetail, setRankingDetail] = useState<UserRankingDetail | null>(null);
+  const [fetchedDetail, setFetchedDetail] = useState<UserRankingDetail | null>(null);
+  // Only the list that's selected right now -- never the one before it while
+  // the new one is still loading.
+  const rankingDetail =
+    fetchedDetail && fetchedDetail.id === selectedRankingId ? fetchedDetail : null;
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("");
@@ -34,13 +38,10 @@ export default function AvailablePlayerList({ draftedPlayerIds, onPick, canPick 
 
   // Load ranking detail when selection changes
   useEffect(() => {
-    if (!selectedRankingId) {
-      setRankingDetail(null);
-      return;
-    }
+    if (!selectedRankingId) return;
     apiFetch<UserRankingDetail>(`/api/rankings/${selectedRankingId}`)
-      .then(setRankingDetail)
-      .catch(() => setRankingDetail(null));
+      .then(setFetchedDetail)
+      .catch(() => setFetchedDetail(null));
   }, [selectedRankingId]);
 
   // Build the player list: use ranking order if available, fallback to all players

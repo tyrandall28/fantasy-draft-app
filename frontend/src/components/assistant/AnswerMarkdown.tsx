@@ -1,5 +1,13 @@
-import { Children, cloneElement, isValidElement, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import {
+  Children,
+  cloneElement,
+  createContext,
+  isValidElement,
+  useContext,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 /**
@@ -70,95 +78,95 @@ function alignClass(cols: boolean[], index: unknown): string {
   return cols[i] ? "text-right stat-num" : "text-left";
 }
 
-export default function AnswerMarkdown({ content }: { content: string }) {
-  // Recomputed per table by the `table` renderer below; `th`/`td` read it from
-  // this closure rather than a context, since a table can't nest here.
-  let cols: boolean[] = [];
+/**
+ * Which columns of the table being rendered hold numbers. Set by the `table`
+ * renderer, read by every `th`/`td` inside it.
+ */
+const NumericColumns = createContext<boolean[]>([]);
 
+type CellProps = ComponentPropsWithoutRef<"td"> & { "data-col"?: number; node?: unknown };
+
+function HeaderCell({ children, "data-col": col }: CellProps) {
+  const cols = useContext(NumericColumns);
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <p className="mb-2 leading-relaxed last:mb-0">{children}</p>,
-        // Bold is the model's emphasis on the answer itself -- the player who
-        // leads, the number asked for -- so it steps up to full chalk out of the
-        // bubble's dimmed body text.
-        strong: ({ children }) => <strong className="font-medium text-chalk">{children}</strong>,
-        em: ({ children }) => <em className="italic">{children}</em>,
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-            {children}
-          </a>
-        ),
-        ul: ({ children }) => (
-          <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
-        ),
-        ol: ({ children }) => (
-          <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>
-        ),
-        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-        h1: ({ children }) => (
-          <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
-        ),
-        h2: ({ children }) => (
-          <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
-        ),
-        h3: ({ children }) => (
-          <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-ink-900 px-1 py-0.5 font-mono text-[0.9em] text-chalk">
-            {children}
-          </code>
-        ),
-        pre: ({ children }) => (
-          <pre className="scroll-quiet mb-2 overflow-x-auto rounded-lg bg-ink-900 p-3 text-xs last:mb-0">
-            {children}
-          </pre>
-        ),
-        blockquote: ({ children }) => (
-          <blockquote className="my-2 border-l-2 border-ink-600 pl-3 text-chalk-mut">
-            {children}
-          </blockquote>
-        ),
-        hr: () => <hr className="my-3 border-ink-600" />,
-        // The table breaks out of the bubble's horizontal padding so a
-        // leaderboard gets the full width to sit in, and scrolls quietly rather
-        // than stretching the bubble if it's wider still.
-        table: ({ node, children }) => {
-          cols = numericColumns(node);
-          return (
-            <div className="scroll-quiet -mx-4 my-2 overflow-x-auto border-y border-ink-600">
-              <table className="w-full text-xs">{children}</table>
-            </div>
-          );
-        },
-        thead: ({ children }) => <thead>{children}</thead>,
-        tr: ({ children }) => (
-          <tr className="border-b border-ink-600/60 last:border-0">{withColumnIndex(children)}</tr>
-        ),
-        th: ({ children, ...props }) => (
-          <th
-            className={`px-3 py-1.5 font-medium whitespace-nowrap text-chalk-mut ${alignClass(
-              cols,
-              (props as { "data-col"?: number })["data-col"],
-            )}`}
-          >
-            {children}
-          </th>
-        ),
-        td: ({ children, ...props }) => (
-          <td
-            className={`px-3 py-1.5 whitespace-nowrap ${alignClass(
-              cols,
-              (props as { "data-col"?: number })["data-col"],
-            )}`}
-          >
-            {children}
-          </td>
-        ),
-      }}
-    >
+    <th className={`px-3 py-1.5 font-medium whitespace-nowrap text-chalk-mut ${alignClass(cols, col)}`}>
+      {children}
+    </th>
+  );
+}
+
+function BodyCell({ children, "data-col": col }: CellProps) {
+  const cols = useContext(NumericColumns);
+  return (
+    <td className={`px-3 py-1.5 whitespace-nowrap ${alignClass(cols, col)}`}>{children}</td>
+  );
+}
+
+const components: Components = {
+  p: ({ children }) => <p className="mb-2 leading-relaxed last:mb-0">{children}</p>,
+  // Bold is the model's emphasis on the answer itself -- the player who
+  // leads, the number asked for -- so it steps up to full chalk out of the
+  // bubble's dimmed body text.
+  strong: ({ children }) => <strong className="font-medium text-chalk">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+      {children}
+    </a>
+  ),
+  ul: ({ children }) => (
+    <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  h1: ({ children }) => (
+    <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
+  ),
+  h2: ({ children }) => (
+    <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
+  ),
+  h3: ({ children }) => (
+    <h3 className="mt-3 mb-1 font-medium text-chalk first:mt-0">{children}</h3>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-ink-900 px-1 py-0.5 font-mono text-[0.9em] text-chalk">
+      {children}
+    </code>
+  ),
+  pre: ({ children }) => (
+    <pre className="scroll-quiet mb-2 overflow-x-auto rounded-lg bg-ink-900 p-3 text-xs last:mb-0">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="my-2 border-l-2 border-ink-600 pl-3 text-chalk-mut">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="my-3 border-ink-600" />,
+  // The table breaks out of the bubble's horizontal padding so a
+  // leaderboard gets the full width to sit in, and scrolls quietly rather
+  // than stretching the bubble if it's wider still.
+  table: ({ node, children }) => (
+    <NumericColumns.Provider value={numericColumns(node)}>
+      <div className="scroll-quiet -mx-4 my-2 overflow-x-auto border-y border-ink-600">
+        <table className="w-full text-xs">{children}</table>
+      </div>
+    </NumericColumns.Provider>
+  ),
+  thead: ({ children }) => <thead>{children}</thead>,
+  tr: ({ children }) => (
+    <tr className="border-b border-ink-600/60 last:border-0">{withColumnIndex(children)}</tr>
+  ),
+  th: HeaderCell,
+  td: BodyCell,
+};
+
+export default function AnswerMarkdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
       {content}
     </ReactMarkdown>
   );

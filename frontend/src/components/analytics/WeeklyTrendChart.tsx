@@ -108,7 +108,7 @@ const receptions: TrendMetric = {
 };
 
 /** Get available metrics for a position */
-export function getMetricsForPosition(position: string): TrendMetric[] {
+function getMetricsForPosition(position: string): TrendMetric[] {
   switch (position) {
     case "QB":
       return [pprPoints, passYards, rushYards, snapPct];

@@ -61,7 +61,8 @@ export function useDraftValueAnalysis(
   // come back empty and the whole panel would render as "no data".
   const { analysisSeason: season, fetchPositionData } = useAnalyticsData();
   const [pool, setPool] = useState<PlayerDerivedStats[]>([]);
-  const [fetching, setFetching] = useState(false);
+  const [loadedSeason, setLoadedSeason] = useState<number | null>(null);
+  const fetching = season != null && loadedSeason !== season;
 
   const {
     thresholds = DEFAULT_12_TEAM_THRESHOLDS,
@@ -75,7 +76,6 @@ export function useDraftValueAnalysis(
   useEffect(() => {
     if (season == null) return;
     let cancelled = false;
-    setFetching(true);
     Promise.all(
       SCORING_POSITIONS.map((pos) => fetchPositionData(pos, season))
     )
@@ -85,7 +85,7 @@ export function useDraftValueAnalysis(
         setPool(results.flat());
       })
       .finally(() => {
-        if (!cancelled) setFetching(false);
+        if (!cancelled) setLoadedSeason(season);
       });
     return () => {
       cancelled = true;

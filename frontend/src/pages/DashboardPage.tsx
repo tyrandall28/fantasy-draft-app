@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/auth";
 import { apiFetch } from "../api/client";
+import { errorMessage } from "../lib/errors";
 import type { League } from "../types";
 
 export default function DashboardPage() {
@@ -14,13 +15,8 @@ export default function DashboardPage() {
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
 
-  const fetchLeagues = async () => {
-    const data = await apiFetch<League[]>("/api/leagues");
-    setLeagues(data);
-  };
-
   useEffect(() => {
-    fetchLeagues();
+    apiFetch<League[]>("/api/leagues").then(setLeagues);
   }, []);
 
   const handleCreate = async () => {
@@ -34,8 +30,8 @@ export default function DashboardPage() {
       setShowCreate(false);
       setLeagueName("");
       navigate(`/leagues/${league.id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 
@@ -50,8 +46,8 @@ export default function DashboardPage() {
       setShowJoin(false);
       setInviteCode("");
       navigate(`/leagues/${league.id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 

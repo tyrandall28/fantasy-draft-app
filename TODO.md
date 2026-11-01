@@ -12,8 +12,7 @@ Everything named here has a fuller entry further down.
    crash is a white screen. → *UI / UX Polish*
 2. **The app is desktop-only.** → *Responsive layouts*, below, which now says
    what specifically breaks.
-3. **Lint isn't in CI** and `npm run lint` is red with 31 errors. →
-   *Code Health*
+3. ~~Lint isn't in CI~~ — done 2026-10-31, see *Code Health*.
 4. Smaller, individually cheap: the loose ends in *API hardening — leftovers*.
 
 Verified green on the audit date: `pytest` (309), `alembic check`, `alembic`
@@ -466,27 +465,36 @@ season made fully-loaded data look missing.
 
 ## Code Health
 
-### Frontend lint — 31 ESLint errors (pre-existing)
-`npm run lint` is red. The build and typecheck are green; this is lint only.
-Breakdown:
-- **13x `@typescript-eslint/no-explicit-any`** — mostly `catch (err: any)` in
-  page components, plus a few Recharts callback props. Mechanical to fix: drop
-  the annotation and narrow with `err instanceof Error ? err.message : String(err)`.
-- **~10x `react-hooks` compiler errors** — "Calling setState synchronously
-  within an effect", "Cannot access variable before it is declared", "Cannot
-  call impure function during render". These come from the new compiler-aware
-  rules in eslint-plugin-react-hooks v7 and need actual effect restructuring,
-  not annotation changes. Do these deliberately, one page at a time.
-- **6x `react-refresh/only-export-components`** — context files exporting both a
-  provider component and a hook. Fix by splitting hooks into their own modules.
-- **1x `no-empty`**, **4 `exhaustive-deps` warnings**.
+### Frontend lint
+- [x] **Lint is clean and in CI** (2026-10-31) — `npm run lint` reported 31
+  errors; it now reports none, and CI runs it with `--max-warnings=0`. Warnings
+  fail too because the React Compiler rules only report the first problem per
+  component: fixing one exposed the next, so the real count was higher than 31.
+  What the fixes were, so the patterns stay consistent:
+  - `catch (err: any)` → `catch (err)` + `errorMessage(err)` from `lib/errors.ts`.
+  - Effects that reset state when a prop changes → derive it instead. The
+    player card remounts per player (`key={playerId}`); "loading" flags are
+    derived from which request last finished (`loadedKey !== requestKey`)
+    rather than set to `true` at the top of the effect.
+  - Callbacks an effect must call without re-running on → `useEffectEvent`
+    (React 19.2), not a ref assigned during render.
+  - Context files split into a provider (`AuthContext.tsx`) and a hook module
+    (`auth.ts`) so fast refresh works; same for `draft` and `playerCard`.
+  - The draft socket's messages are typed as `DraftServerEvent` in
+    `context/draft.ts`. Its `catch {}` used to swallow exceptions thrown by the
+    message handler too, not just bad JSON; it now only catches the parse.
 
-Lint is deliberately not in CI until these are resolved — a permanently red
-check gets ignored, and a `continue-on-error` check is worse than none.
-
-- [ ] **Add the lint job once the count is zero.** Until then anyone who
-  clones the repo and runs `npm run lint` sees 31 errors, which reads worse
-  than the code is. This is the only one of the three CI checks missing.
+### Draft room bugs found during the lint pass (open)
+- [ ] **The draft value panel never knows who you are.** `DraftContext`'s
+  `myPicks` and `DraftValuePanel`'s `isMyTurn` both read
+  `localStorage.getItem("user_id")`, which nothing ever writes. So `myPicks` is
+  always empty (every roster slot looks open to the VOR suggestions) and
+  `isMyTurn` is always false. Fix: read `useAuth().user.id` instead, the way `DraftRoomPage` already
+  passes `userId` to `TeamRosterPanel` (which is why the roster is right).
+- [ ] **Server `error` messages are dropped.** `draft_room.py` sends
+  `{"event": "error", "message": ...}` for a rejected pick ("Not your turn",
+  already drafted, ...), and `DraftContext` has no case for it, so the click
+  just does nothing. Needs a toast or inline message.
 
 ### Frontend bundle — one 1.03 MB chunk
 `npm run build` emits a single `index-*.js` of ~1,036 kB (~302 kB gzipped) and

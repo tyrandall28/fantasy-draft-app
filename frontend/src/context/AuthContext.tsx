@@ -1,41 +1,20 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { apiFetch, clearTokens, setTokens } from "../api/client";
 import type { TokenResponse, User } from "../types";
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    username: string,
-    password: string
-  ) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
+import { AuthContext } from "./auth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Only a stored token has anything to wait for; without one we already know
+  // the answer is "signed out".
+  const [loading, setLoading] = useState(() => localStorage.getItem("access_token") !== null);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      apiFetch<User>("/api/auth/me")
-        .then(setUser)
-        .catch(() => clearTokens())
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    if (!localStorage.getItem("access_token")) return;
+    apiFetch<User>("/api/auth/me")
+      .then(setUser)
+      .catch(() => clearTokens())
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -72,10 +51,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
 }

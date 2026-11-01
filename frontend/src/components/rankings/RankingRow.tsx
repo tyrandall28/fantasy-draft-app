@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { usePlayerCard } from "../../context/PlayerCardContext";
+import { usePlayerCard } from "../../context/playerCard";
 import type { UserRankingEntry } from "../../types";
 import { positionBadge } from "../../lib/positionColors";
 

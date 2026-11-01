@@ -99,7 +99,10 @@ export default function PlayerAnalyticsColumn({
   // Fall back to the WR layout only for positions we simply don't have a
   // bespoke stat set for -- never for one with no data, which would otherwise
   // render a defense with receiving labels and a column of dashes.
-  const statDefs = KEY_STATS[position] ?? (notice?.level === "none" ? [] : KEY_STATS["WR"]);
+  const statDefs = useMemo(
+    () => KEY_STATS[position] ?? (positionNotice(position)?.level === "none" ? [] : KEY_STATS["WR"]),
+    [position],
+  );
 
   const sortedByMetric = useMemo(() => {
     const map = new Map<string, number[]>();

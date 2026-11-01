@@ -1,4 +1,4 @@
-import { usePlayerCard } from "../../context/PlayerCardContext";
+import { usePlayerCard } from "../../context/playerCard";
 import type { DraftState } from "../../types";
 import { POSITION_CELL, POSITION_CELL_DEFAULT } from "../../lib/positionColors";
 

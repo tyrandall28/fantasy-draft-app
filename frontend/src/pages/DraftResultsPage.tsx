@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiFetch } from "../api/client";
-import { usePlayerCard } from "../context/PlayerCardContext";
+import { usePlayerCard } from "../context/playerCard";
 
 interface RosterPlayer {
   player_id: number;

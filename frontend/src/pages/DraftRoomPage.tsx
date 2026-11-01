@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { DraftProvider, useDraft } from "../context/DraftContext";
-import { useAuth } from "../context/AuthContext";
+import { DraftProvider } from "../context/DraftContext";
+import { useDraft } from "../context/draft";
+import { useAuth } from "../context/auth";
 import DraftBoard from "../components/draft/DraftBoard";
 import AvailablePlayerList from "../components/draft/AvailablePlayerList";
 import TeamRosterPanel from "../components/draft/TeamRosterPanel";

@@ -33,7 +33,10 @@ export default function ContextualAnalyticsPanel({
   const [sparklines, setSparklines] = useState<SparklineData>({});
   // Weekly keyed by playerId so we can hold both compared players' data at once
   const [weeklyByPlayer, setWeeklyByPlayer] = useState<Map<number, PlayerWeekly[]>>(new Map());
-  const [loading, setLoading] = useState(false);
+  // The selection whose fetches last finished; anything else is still loading.
+  const requestKey = `${selectedPlayerIds.join(",")}|${season}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = selectedPlayerIds.length > 0 && season != null && loadedKey !== requestKey;
 
   // Resolve selected entries from rankings
   const selectedEntries = useMemo(
@@ -49,7 +52,6 @@ export default function ContextualAnalyticsPanel({
     if (selectedPlayerIds.length === 0 || season == null) return;
 
     let cancelled = false;
-    setLoading(true);
 
     const positions = [...new Set(selectedEntries.map((e) => e.player.position))];
     const tasks: Promise<unknown>[] = [];
@@ -91,13 +93,13 @@ export default function ContextualAnalyticsPanel({
     });
 
     Promise.all(tasks).finally(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setLoadedKey(requestKey);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [selectedPlayerIds, season, selectedEntries, fetchPositionData, fetchSparklines, fetchWeekly]);
+  }, [selectedPlayerIds, season, selectedEntries, fetchPositionData, fetchSparklines, fetchWeekly, requestKey]);
 
   // Build lookups for rendering
   const getPlayerStats = (playerId: number, position: string): PlayerDerivedStats | null => {

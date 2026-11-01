@@ -23,15 +23,22 @@ function pct(val: number | null | undefined): string {
 }
 
 interface Props {
-  playerId: number | null;
+  playerId: number;
   onClose: () => void;
+}
+
+/** Whole years since `birthDate`, as of now. 31557600000 ms = 365.25 days. */
+function ageFromBirthDate(birthDate: string): number {
+  return Math.floor((Date.now() - new Date(birthDate).getTime()) / 31557600000);
 }
 
 export default function PlayerCard({ playerId, onClose }: Props) {
   const [detail, setDetail] = useState<PlayerDetail | null>(null);
   const [weekly, setWeekly] = useState<PlayerWeekly[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Mounted fresh per player (keyed by id in PlayerCardProvider), so the first
+  // render is always waiting on that player's stats.
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"seasons" | "weekly">("seasons");
   const [scrolling, setScrolling] = useState(false);
   const scrollTimer = useRef<number | undefined>(undefined);
@@ -47,35 +54,42 @@ export default function PlayerCard({ playerId, onClose }: Props) {
   useEffect(() => () => window.clearTimeout(scrollTimer.current), []);
 
   useEffect(() => {
-    if (!playerId) {
-      setDetail(null);
-      setWeekly([]);
-      setSelectedSeason(null);
-      return;
-    }
-    setLoading(true);
+    let cancelled = false;
     apiFetch<PlayerDetail>(`/api/players/${playerId}/stats`)
       .then((d) => {
+        if (cancelled) return;
         setDetail(d);
         if (d.seasons.length > 0) {
           setSelectedSeason(d.seasons[0].season);
         }
       })
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) setDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [playerId]);
 
   useEffect(() => {
-    if (!playerId || !selectedSeason) {
-      setWeekly([]);
-      return;
-    }
+    if (!selectedSeason) return;
+    // Clicking through seasons quickly mustn't let a slow earlier response
+    // land on top of the season now selected.
+    let cancelled = false;
     apiFetch<PlayerWeekly[]>(`/api/players/${playerId}/weekly?season=${selectedSeason}`)
-      .then(setWeekly)
-      .catch(() => setWeekly([]));
+      .then((w) => {
+        if (!cancelled) setWeekly(w);
+      })
+      .catch(() => {
+        if (!cancelled) setWeekly([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [playerId, selectedSeason]);
-
-  if (!playerId) return null;
 
   const pos = detail?.player.position ?? "";
   const cardNotice = positionNotice(pos);
@@ -146,7 +160,7 @@ export default function PlayerCard({ playerId, onClose }: Props) {
                       </span>
                     )}
                     {detail.bio.birth_date && (
-                      <span>Age {Math.floor((Date.now() - new Date(detail.bio.birth_date).getTime()) / 31557600000)}</span>
+                      <span>Age {ageFromBirthDate(detail.bio.birth_date)}</span>
                     )}
                   </div>
                 )}

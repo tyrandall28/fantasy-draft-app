@@ -10,7 +10,7 @@ import {
   ReferenceLine,
   Label,
 } from "recharts";
-import { usePlayerCard } from "../../context/PlayerCardContext";
+import { usePlayerCard } from "../../context/playerCard";
 import type { PlayerDerivedStats } from "../../types";
 
 interface Props {
@@ -100,11 +100,13 @@ export default function TargetShareAirYardsChart({ data, position }: Props) {
   const color = "#edeae3";
 
   // Label animation (same pattern as BoomBustChart)
+  // Labels are shown for whichever data set the timer last finished on, so new
+  // data hides them in the same render it arrives in -- no reset needed.
   const DOT_ANIMATION_MS = 500;
-  const [showLabels, setShowLabels] = useState(false);
+  const [labelsShownFor, setLabelsShownFor] = useState<{ data: unknown; position: unknown } | null>(null);
+  const showLabels = labelsShownFor?.data === data && labelsShownFor?.position === position;
   useEffect(() => {
-    setShowLabels(false);
-    const timer = setTimeout(() => setShowLabels(true), DOT_ANIMATION_MS);
+    const timer = setTimeout(() => setLabelsShownFor({ data, position }), DOT_ANIMATION_MS);
     return () => clearTimeout(timer);
   }, [data, position]);
 

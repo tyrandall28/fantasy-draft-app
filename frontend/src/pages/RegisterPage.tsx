@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/auth";
+import { errorMessage } from "../lib/errors";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -18,8 +19,8 @@ export default function RegisterPage() {
     try {
       await register(email, username, password);
       navigate("/");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }

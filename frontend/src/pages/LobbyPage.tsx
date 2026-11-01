@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client";
-import { useAuth } from "../context/AuthContext";
-import { usePlayerCard } from "../context/PlayerCardContext";
+import { errorMessage } from "../lib/errors";
+import { useAuth } from "../context/auth";
+import { usePlayerCard } from "../context/playerCard";
 import type { League, UserRanking, UserRankingDetail } from "../types";
 import BottomPanel from "../components/draft/BottomPanel";
 import { positionBadge } from "../lib/positionColors";
@@ -25,42 +26,43 @@ export default function LobbyPage() {
   // Rankings state
   const [rankings, setRankings] = useState<UserRanking[]>([]);
   const [selectedRankingId, setSelectedRankingId] = useState<string>("");
-  const [rankingDetail, setRankingDetail] = useState<UserRankingDetail | null>(null);
+  const [fetchedDetail, setFetchedDetail] = useState<UserRankingDetail | null>(null);
+  // Only the list that's selected right now -- never the one before it while
+  // the new one is still loading.
+  const rankingDetail =
+    fetchedDetail && fetchedDetail.id === selectedRankingId ? fetchedDetail : null;
   const [rankingSearch, setRankingSearch] = useState("");
   const [rankingPosFilter, setRankingPosFilter] = useState("");
 
-  const fetchLeague = async () => {
+  const fetchLeague = useCallback(async () => {
     try {
       const data = await apiFetch<League>(`/api/leagues/${id}`);
       setLeague(data);
       if (data.status === "drafting" || data.status === "completed") {
         navigate(`/draft/${id}`);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
 
   useEffect(() => {
     fetchLeague();
     const interval = setInterval(fetchLeague, 5000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [fetchLeague]);
 
   useEffect(() => {
     apiFetch<UserRanking[]>("/api/rankings").then(setRankings).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!selectedRankingId) {
-      setRankingDetail(null);
-      return;
-    }
+    if (!selectedRankingId) return;
     apiFetch<UserRankingDetail>(`/api/rankings/${selectedRankingId}`)
-      .then(setRankingDetail)
-      .catch(() => setRankingDetail(null));
+      .then(setFetchedDetail)
+      .catch(() => setFetchedDetail(null));
   }, [selectedRankingId]);
 
   useEffect(() => {
@@ -75,9 +77,9 @@ export default function LobbyPage() {
   useEffect(() => {
     if (league && user) {
       const me = league.members.find((m) => m.user_id === user.id);
-      if (me?.ranking_id && !selectedRankingId) {
-        setSelectedRankingId(me.ranking_id);
-      }
+      // Adopt the ranking saved on the server, but never over one picked here.
+      const saved = me?.ranking_id;
+      if (saved) setSelectedRankingId((current) => current || saved);
     }
   }, [league, user]);
 
@@ -93,8 +95,8 @@ export default function LobbyPage() {
     try {
       await apiFetch(`/api/leagues/${id}/bots`, { method: "POST" });
       await fetchLeague();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setAddingBot(false);
     }
@@ -104,8 +106,8 @@ export default function LobbyPage() {
     try {
       await apiFetch(`/api/leagues/${id}/bots/${botUserId}`, { method: "DELETE" });
       await fetchLeague();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 
@@ -115,8 +117,8 @@ export default function LobbyPage() {
     try {
       await apiFetch(`/api/leagues/${id}/draft/start`, { method: "POST" });
       navigate(`/draft/${id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
       setStarting(false);
     }
   };
@@ -152,8 +154,8 @@ export default function LobbyPage() {
         body: JSON.stringify({ position: myPosition === pos ? null : pos }),
       });
       await fetchLeague();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 
@@ -166,8 +168,8 @@ export default function LobbyPage() {
         body: JSON.stringify(patch),
       });
       setLeague(updated);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { apiFetch } from "../../api/client";
-import { usePlayerCard } from "../../context/PlayerCardContext";
+import { usePlayerCard } from "../../context/playerCard";
 import type { BaseRankingEntry, UserRankingEntry } from "../../types";
 import { positionBadge } from "../../lib/positionColors";
 
@@ -22,19 +22,31 @@ export default function SourceComparisonPanel({ sources, userEntries, initialSou
   const { openPlayerCard } = usePlayerCard();
   const [selectedSource, setSelectedSource] = useState(initialSource || sources[0]?.value || "");
   const [baseEntries, setBaseEntries] = useState<BaseRankingEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const loading = selectedSource !== "" && loadedSource !== selectedSource;
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [filter, setFilter] = useState("");
 
+  // Reports to the parent without making a new callback identity refetch.
+  const reportLoaded = useEffectEvent((entries: BaseRankingEntry[]) => {
+    onBaseEntriesLoaded?.(entries);
+  });
+
   useEffect(() => {
     if (!selectedSource) return;
-    setLoading(true);
+    let cancelled = false;
     apiFetch<BaseRankingEntry[]>(`/api/players/base-rankings?source=${selectedSource}`)
       .then((entries) => {
+        if (cancelled) return;
         setBaseEntries(entries);
-        onBaseEntriesLoaded?.(entries);
+        reportLoaded(entries);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoadedSource(selectedSource);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSource]);
 
   // Build lookup: player_id -> base rank (for analysis)
