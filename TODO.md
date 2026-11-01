@@ -370,10 +370,9 @@ This section is the state of the work.
   dependencies but not the transitive tree, which is exactly how bcrypt drifted.
   `pip-tools` (`requirements.in` -> compiled `requirements.txt` with hashes) or
   `uv` would make local and CI provably identical. Worth doing before deploying.
-- [ ] **CI Node version vs local** — CI uses `node-version: "20"` while local dev
-  is on v24.19.0. Vite 7 requires `^20.19 || >=22.12`, so both satisfy it, but
-  matching them (or adding an `engines` field plus `.nvmrc`) would remove
-  another source of "works locally, fails in CI".
+- [x] **CI Node version vs local** (2026-10-31) — CI ran Node 20, which is past
+  end-of-life, while local dev and the Docker build used 24. All three now use
+  24, set once in `.nvmrc`; CI reads it with `node-version-file`.
 
 ---
 

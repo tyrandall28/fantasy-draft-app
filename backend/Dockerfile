@@ -10,7 +10,7 @@
 # here means CORS never enters the picture and /ws works with no extra config.
 
 # ---- Stage 1: build the frontend ----------------------------------------
-# Node 24 to match local dev (CI still uses 20; both satisfy Vite 7).
+# Node 24, the version in .nvmrc, which local dev and CI also use.
 FROM node:24-slim AS frontend
 
 WORKDIR /build

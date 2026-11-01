@@ -154,7 +154,7 @@ fantasy-draft-app/
 
 ## Quick start
 
-Needs Python 3.12, Node 20+, and either PostgreSQL 17 or Docker. It was built on
+Needs Python 3.12, Node 24 (pinned in `.nvmrc`), and either PostgreSQL 17 or Docker. It was built on
 Windows, so the commands are PowerShell; the one line that differs in bash is
 marked.
 

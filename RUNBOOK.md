@@ -451,9 +451,10 @@ python -m scripts.reset_db          # prompts for confirmation
 python -m scripts.refresh_data --first-time
 ```
 
-### `npm run dev` warns about the Node version
+### `npm` warns about the Node version
 
-Harmless. Node 20.14 vs the requested 20.19; everything works.
+Use Node 24, the version in `.nvmrc` (`nvm use` picks it up). CI and the Docker
+build use the same one.
 
 ---
 
